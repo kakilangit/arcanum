@@ -434,10 +434,20 @@ defmodule Arcanum.Adapters.OpenAI do
   end
 
   defp base_url(provider, path) do
-    provider.base_url
-    |> String.trim_trailing("/")
-    |> String.trim_trailing("/v1")
-    |> Kernel.<>(path)
+    # Strip the /v1 prefix from the path if the base_url already contains
+    # a version segment (e.g. /v4 for Z.AI). If no version in base_url,
+    # keep the /v1 path prefix as-is (standard OpenAI convention).
+    base =
+      provider.base_url
+      |> String.trim_trailing("/")
+
+    if Regex.match?(~r"/v\d+$", base) do
+      # Base URL has version (e.g. .../v4) — strip /v1 from path
+      path = String.replace_prefix(path, "/v1", "")
+      base <> path
+    else
+      base <> path
+    end
   end
 
   defp http_client do
