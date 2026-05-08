@@ -14,6 +14,8 @@ defmodule Arcanum.ModelProfile do
           supports_tools: boolean(),
           tool_call_format: tool_call_format(),
           reasoning_field: atom() | nil,
+          thinking_param: map() | nil,
+          preserve_reasoning: boolean(),
           max_context: pos_integer(),
           provider_routing: map() | nil
         }
@@ -23,6 +25,8 @@ defmodule Arcanum.ModelProfile do
             supports_tools: true,
             tool_call_format: :native,
             reasoning_field: nil,
+            thinking_param: nil,
+            preserve_reasoning: false,
             max_context: 131_072,
             provider_routing: nil
 

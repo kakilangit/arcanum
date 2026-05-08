@@ -120,6 +120,7 @@ defmodule Arcanum.Adapters.OpenAI do
     body = if tools, do: Map.put(body, :tools, tools), else: body
     body = if intent.temperature, do: Map.put(body, :temperature, intent.temperature), else: body
     body = if intent.max_tokens, do: Map.put(body, :max_tokens, intent.max_tokens), else: body
+    body = apply_thinking_param(body, profile)
 
     apply_provider_routing(body, profile)
   end
@@ -152,6 +153,10 @@ defmodule Arcanum.Adapters.OpenAI do
     end
   end
 
+  # Inject thinking parameter for models that require explicit opt-in (Z.AI GLM-4.7+).
+  defp apply_thinking_param(body, %{thinking_param: nil}), do: body
+  defp apply_thinking_param(body, %{thinking_param: param}), do: Map.put(body, :thinking, param)
+
   # -------------------------------------------------------------------
   # Message formatting (system role demotion at serialization time)
   # -------------------------------------------------------------------
@@ -163,8 +168,19 @@ defmodule Arcanum.Adapters.OpenAI do
   end
 
   # For models that use reasoning_content (DeepSeek V4, GLM-4.7+):
-  # 1. Strip reasoning from all but the last assistant message to save context
-  # 2. Backfill empty reasoning_content on assistant messages that lack it
+  # When preserve_reasoning is true (interleaved thinking): keep reasoning on all messages.
+  # Otherwise: strip reasoning from all but the last assistant message to save context,
+  # and backfill empty reasoning_content on assistant messages that lack it.
+  defp apply_reasoning_transforms(messages, %{
+         reasoning_field: :reasoning_content,
+         preserve_reasoning: true
+       }) do
+    Enum.map(messages, fn
+      %{role: :assistant} = msg -> Map.put_new(msg, :thinking, "")
+      msg -> msg
+    end)
+  end
+
   defp apply_reasoning_transforms(messages, %{reasoning_field: :reasoning_content}) do
     last_assistant_idx = find_last_assistant_index(messages)
 

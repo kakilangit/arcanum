@@ -131,6 +131,19 @@ defmodule Arcanum.ModelProfile.Resolver do
     }
   end
 
+  # GLM-4.7+ with interleaved thinking: requires explicit thinking param
+  # and reasoning_content preserved on all assistant messages.
+  defp zai_thinking do
+    %ModelProfile{
+      supports_system_role: true,
+      supports_tools: true,
+      tool_call_format: :native,
+      reasoning_field: :reasoning_content,
+      thinking_param: %{"type" => "enabled"},
+      preserve_reasoning: true
+    }
+  end
+
   # -------------------------------------------------------------------
   # Known model overrides (exact match)
   # Capped at @max_profiles entries to enforce bounded collections.
@@ -145,6 +158,13 @@ defmodule Arcanum.ModelProfile.Resolver do
         tool_call_format: :xml_text,
         reasoning_field: :reasoning_content,
         max_context: 131_072,
+        provider_routing: %{route: "fallback", require: ["tools"]}
+      },
+      "nvidia/nemotron-nano-9b-v2:free" => %ModelProfile{
+        supports_system_role: true,
+        supports_tools: false,
+        tool_call_format: :xml_text,
+        reasoning_field: nil,
         provider_routing: %{route: "fallback", require: ["tools"]}
       },
       "deepseek/deepseek-chat-v3-0324:free" => %ModelProfile{
@@ -193,7 +213,11 @@ defmodule Arcanum.ModelProfile.Resolver do
       "glm-4.5-flash" => zai_no_interleave(),
       "glm-4.5-air" => zai_no_interleave(),
       "glm-4.6" => zai_no_interleave(),
-      "glm-4.6v" => zai_no_interleave()
+      "glm-4.6v" => zai_no_interleave(),
+      # Z.AI / Zhipu GLM — reasoning models with interleaved thinking
+      "glm-4.7" => zai_thinking(),
+      "glm-5" => zai_thinking(),
+      "glm-5.1" => zai_thinking()
     }
 
     # Enforce bounded collection

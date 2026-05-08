@@ -40,13 +40,7 @@ defmodule Arcanum.Gateway do
 
     case adapter.stream(provider, intent, profile) do
       {:ok, stream} ->
-        normalized =
-          Stream.map(stream, fn
-            {:data, %Response{} = delta} -> {:data, Normalizer.normalize_delta(delta, profile)}
-            other -> other
-          end)
-
-        {:ok, normalized}
+        {:ok, stream}
 
       error ->
         error

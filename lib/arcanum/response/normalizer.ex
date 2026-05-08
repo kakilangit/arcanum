@@ -19,6 +19,9 @@ defmodule Arcanum.Response.Normalizer do
 
   @xml_tool_call_regex ~r/<tool_call>\s*<function=([^>]+)>\s*(.*?)\s*<\/function>\s*<\/tool_call>/s
   @xml_param_regex ~r/<parameter=([^>]+)>\s*(.*?)\s*<\/parameter>/s
+  @think_tag_regex ~r/<think>.*?<\/think>\s*/s
+  @dangling_think_regex ~r/<\/?think>\s*/
+  @json_tool_call_regex ~r/```(?:json)?\s*(\{[^`]+\})\s*```/s
   @max_xml_params 50
 
   @doc """
@@ -28,8 +31,10 @@ defmodule Arcanum.Response.Normalizer do
   def normalize(%Response{} = response, %ModelProfile{} = profile) do
     response
     |> apply_content_fallback(profile)
+    |> strip_think_tags()
     |> filter_malformed_tool_calls()
     |> apply_tool_call_extraction(profile)
+    |> apply_json_tool_call_extraction()
   end
 
   @doc """
@@ -68,6 +73,52 @@ defmodule Arcanum.Response.Normalizer do
   end
 
   defp apply_content_fallback(response, _profile), do: response
+
+  # -------------------------------------------------------------------
+  # Strip <think>...</think> tags from content
+  # Some models (DeepSeek, GLM) embed reasoning in <think> tags within
+  # the content field. We extract this to the thinking field and remove
+  # the tags from content.
+  # -------------------------------------------------------------------
+
+  defp strip_think_tags(%{content: nil} = response), do: response
+  defp strip_think_tags(%{content: ""} = response), do: response
+
+  defp strip_think_tags(%{content: content} = response) do
+    if String.contains?(content, "<think>") || String.contains?(content, "</think>") do
+      # Extract thinking from <think> tags if not already set
+      extracted_thinking =
+        @think_tag_regex
+        |> Regex.scan(content)
+        |> Enum.map_join("\n", fn [match] ->
+          match
+          |> String.replace(~r/<\/?think>/, "")
+          |> String.trim()
+        end)
+
+      # Remove all think tags (complete and dangling) from content
+      cleaned =
+        content
+        |> String.replace(@think_tag_regex, "")
+        |> String.replace(@dangling_think_regex, "")
+        |> String.trim()
+
+      thinking =
+        case {response.thinking, extracted_thinking} do
+          {nil, ""} -> nil
+          {nil, extracted} -> extracted
+          {existing, _} -> existing
+        end
+
+      %{response | content: non_blank(cleaned), thinking: thinking}
+    else
+      response
+    end
+  end
+
+  defp non_blank(nil), do: nil
+  defp non_blank(""), do: nil
+  defp non_blank(s) when is_binary(s), do: s
 
   # -------------------------------------------------------------------
   # Malformed tool-call filtering
@@ -166,4 +217,79 @@ defmodule Arcanum.Response.Normalizer do
       }
     }
   end
+
+  # -------------------------------------------------------------------
+  # JSON text tool-call extraction (last resort fallback)
+  #
+  # Some models emit tool calls as JSON in markdown code blocks:
+  #   ```json
+  #   {"tool": "bash", "params": {"command": "date"}}
+  #   ```
+  # This extracts them when no native or XML tool calls were found.
+  # Requires "tool" or "name" key + "params"/"arguments"/"parameters" key.
+  # -------------------------------------------------------------------
+
+  defp apply_json_tool_call_extraction(%{tool_calls: calls} = response)
+       when is_list(calls) and calls != [] do
+    response
+  end
+
+  defp apply_json_tool_call_extraction(%{content: nil} = response), do: response
+  defp apply_json_tool_call_extraction(%{content: ""} = response), do: response
+
+  defp apply_json_tool_call_extraction(%{content: content} = response) do
+    case parse_json_tool_calls(content) do
+      nil ->
+        response
+
+      calls ->
+        Logger.info(
+          "Normalizer: extracted #{length(calls)} JSON tool call(s) from content"
+        )
+
+        %{response | tool_calls: calls}
+    end
+  end
+
+  defp parse_json_tool_calls(content) do
+    @json_tool_call_regex
+    |> Regex.scan(content)
+    |> Enum.flat_map(&decode_json_tool_call/1)
+    |> case do
+      [] -> nil
+      calls -> calls
+    end
+  end
+
+  defp decode_json_tool_call([_full, json_str]) do
+    case Jason.decode(json_str) do
+      {:ok, parsed} -> maybe_build_tool_call(parsed)
+      {:error, _} -> []
+    end
+  end
+
+  # Accepts multiple common JSON tool call formats:
+  # {"tool": "name", "params": {...}}
+  # {"name": "name", "arguments": {...}}
+  # {"function": "name", "parameters": {...}}
+  defp maybe_build_tool_call(parsed) when is_map(parsed) do
+    name = parsed["tool"] || parsed["name"] || parsed["function"]
+    args = parsed["params"] || parsed["arguments"] || parsed["parameters"] || %{}
+
+    if is_binary(name) and name != "" do
+      [
+        %{
+          id: "jsoncall_#{:erlang.unique_integer([:positive])}",
+          function: %{
+            name: name,
+            arguments: if(is_binary(args), do: args, else: Jason.encode!(args))
+          }
+        }
+      ]
+    else
+      []
+    end
+  end
+
+  defp maybe_build_tool_call(_), do: []
 end
