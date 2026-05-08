@@ -67,7 +67,7 @@ defmodule Arcanum.Adapters.OpenAI do
         retry_stream(provider, body, 1)
 
       {:ok, %{status: status, body: resp_body}} ->
-        classify_api_error(status, resp_body)
+        classify_api_error(status, drain_async_body(resp_body))
 
       {:error, reason} ->
         {:error, reason}
@@ -340,7 +340,7 @@ defmodule Arcanum.Adapters.OpenAI do
         retry_stream(provider, body, attempt + 1)
 
       {:ok, %{status: status, body: resp_body}} ->
-        classify_api_error(status, resp_body)
+        classify_api_error(status, drain_async_body(resp_body))
 
       {:error, reason} ->
         {:error, reason}
@@ -477,4 +477,23 @@ defmodule Arcanum.Adapters.OpenAI do
   defp extract_error_message(%{"error" => %{"message" => msg}}) when is_binary(msg), do: msg
   defp extract_error_message(body) when is_binary(body), do: body
   defp extract_error_message(_), do: nil
+
+  # When `into: :self` is used and the response is non-200, the body is a
+  # Req.Response.Async struct (Enumerable) rather than decoded JSON.
+  # Drain it in-process and attempt JSON decode.
+  defp drain_async_body(%Req.Response.Async{} = async) do
+    raw =
+      async
+      |> Enum.to_list()
+      |> IO.iodata_to_binary()
+
+    case Jason.decode(raw) do
+      {:ok, decoded} -> decoded
+      _ -> raw
+    end
+  rescue
+    _ -> nil
+  end
+
+  defp drain_async_body(body), do: body
 end
