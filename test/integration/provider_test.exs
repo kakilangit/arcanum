@@ -4,7 +4,14 @@ defmodule Arcanum.Integration.ProviderTest do
 
   Excluded by default. Run with:
 
+      # OpenAI-compatible (DeepSeek, Z.AI, OpenRouter, etc.)
       mix test --include integration
+
+      # Ollama
+      mix test --include ollama
+
+      # Anthropic
+      mix test --include anthropic
 
   ## Environment Variables
 
@@ -25,7 +32,8 @@ defmodule Arcanum.Integration.ProviderTest do
 
   use ExUnit.Case
 
-  @moduletag :integration
+  # Tags: :integration (OpenAI-compat), :ollama, :anthropic
+  # All excluded by default. Run with --include <tag>.
 
   alias Arcanum.{Gateway, Intent, Response}
 
@@ -50,6 +58,8 @@ defmodule Arcanum.Integration.ProviderTest do
   # -------------------------------------------------------------------
 
   describe "OpenAI-compatible provider" do
+    @describetag :integration
+
     setup do
       url = System.get_env("ARCANUM_TEST_OPENAI_URL")
       key = System.get_env("ARCANUM_TEST_OPENAI_KEY")
@@ -158,17 +168,17 @@ defmodule Arcanum.Integration.ProviderTest do
   # -------------------------------------------------------------------
 
   describe "Ollama provider" do
+    @describetag :ollama
+
     setup do
-      url = System.get_env("ARCANUM_TEST_OLLAMA_URL")
-      model = System.get_env("ARCANUM_TEST_OLLAMA_MODEL")
+      provider = %{
+        base_url: System.get_env("ARCANUM_TEST_OLLAMA_URL"),
+        api_key: nil,
+        kind: "ollama",
+        api_format: :custom
+      }
 
-      if is_nil(url) or is_nil(model) do
-        raise ExUnit.DocTest.Error,
-          message: "ARCANUM_TEST_OLLAMA_URL and ARCANUM_TEST_OLLAMA_MODEL required"
-      end
-
-      provider = %{base_url: url, api_key: nil, kind: "ollama", api_format: :custom}
-      {:ok, provider: provider, model: model}
+      {:ok, provider: provider, model: System.get_env("ARCANUM_TEST_OLLAMA_MODEL")}
     end
 
     @tag timeout: 60_000
@@ -197,18 +207,17 @@ defmodule Arcanum.Integration.ProviderTest do
   # -------------------------------------------------------------------
 
   describe "Anthropic provider" do
+    @describetag :anthropic
+
     setup do
-      url = System.get_env("ARCANUM_TEST_ANTHROPIC_URL")
-      key = System.get_env("ARCANUM_TEST_ANTHROPIC_KEY")
-      model = System.get_env("ARCANUM_TEST_ANTHROPIC_MODEL")
+      provider = %{
+        base_url: System.get_env("ARCANUM_TEST_ANTHROPIC_URL"),
+        api_key: System.get_env("ARCANUM_TEST_ANTHROPIC_KEY"),
+        kind: "anthropic",
+        api_format: :anthropic
+      }
 
-      if is_nil(url) or is_nil(key) or is_nil(model) do
-        raise ExUnit.DocTest.Error,
-          message: "ARCANUM_TEST_ANTHROPIC_URL, KEY, and MODEL required"
-      end
-
-      provider = %{base_url: url, api_key: key, kind: "anthropic", api_format: :anthropic}
-      {:ok, provider: provider, model: model}
+      {:ok, provider: provider, model: System.get_env("ARCANUM_TEST_ANTHROPIC_MODEL")}
     end
 
     @tag timeout: 30_000
