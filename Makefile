@@ -1,4 +1,4 @@
-.PHONY: deps compile fmt fmt-check lint test ci publish
+.PHONY: deps compile fmt fmt-check lint test test.integration ci publish
 
 deps:
 	mix deps.get
@@ -17,6 +17,9 @@ lint:
 
 test:
 	mix test
+
+test.integration:
+	mix test --include integration
 
 ci: lint test
 
