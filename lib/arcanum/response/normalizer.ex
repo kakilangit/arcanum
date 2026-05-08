@@ -243,9 +243,7 @@ defmodule Arcanum.Response.Normalizer do
         response
 
       calls ->
-        Logger.info(
-          "Normalizer: extracted #{length(calls)} JSON tool call(s) from content"
-        )
+        Logger.info("Normalizer: extracted #{length(calls)} JSON tool call(s) from content")
 
         %{response | tool_calls: calls}
     end
