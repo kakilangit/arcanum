@@ -76,7 +76,7 @@ defmodule Arcanum.Adapters.OpenAI do
 
   @impl true
   def list_models(provider) do
-    case http_client().get(base_url(provider, "/v1/models"), headers: headers(provider)) do
+    case http_client().get(base_url(provider, "/models"), headers: headers(provider)) do
       {:ok, %{status: 200, body: %{"data" => models}}} ->
         {:ok, Enum.map(models, & &1["id"])}
 
@@ -92,7 +92,7 @@ defmodule Arcanum.Adapters.OpenAI do
   def embed(provider, model, input) do
     body = %{model: model, input: input}
 
-    case http_client().post(base_url(provider, "/v1/embeddings"),
+    case http_client().post(base_url(provider, "/embeddings"),
            json: body,
            headers: headers(provider),
            receive_timeout: @receive_timeout
@@ -409,7 +409,7 @@ defmodule Arcanum.Adapters.OpenAI do
   # -------------------------------------------------------------------
 
   defp do_request(provider, body) do
-    http_client().post(base_url(provider, "/v1/chat/completions"),
+    http_client().post(base_url(provider, "/chat/completions"),
       json: body,
       headers: headers(provider),
       receive_timeout: @receive_timeout
@@ -417,7 +417,7 @@ defmodule Arcanum.Adapters.OpenAI do
   end
 
   defp do_stream_request(provider, body) do
-    http_client().post(base_url(provider, "/v1/chat/completions"),
+    http_client().post(base_url(provider, "/chat/completions"),
       json: body,
       headers: headers(provider),
       into: :self,
@@ -434,20 +434,9 @@ defmodule Arcanum.Adapters.OpenAI do
   end
 
   defp base_url(provider, path) do
-    # Strip the /v1 prefix from the path if the base_url already contains
-    # a version segment (e.g. /v4 for Z.AI). If no version in base_url,
-    # keep the /v1 path prefix as-is (standard OpenAI convention).
-    base =
-      provider.base_url
-      |> String.trim_trailing("/")
-
-    if Regex.match?(~r"/v\d+$", base) do
-      # Base URL has version (e.g. .../v4) — strip /v1 from path
-      path = String.replace_prefix(path, "/v1", "")
-      base <> path
-    else
-      base <> path
-    end
+    provider.base_url
+    |> String.trim_trailing("/")
+    |> Kernel.<>(path)
   end
 
   defp http_client do
