@@ -78,7 +78,7 @@ defmodule Arcanum.Adapters.OpenAI do
   def list_models(provider) do
     case http_client().get(base_url(provider, "/models"), headers: headers(provider)) do
       {:ok, %{status: 200, body: %{"data" => models}}} ->
-        {:ok, Enum.map(models, & &1["id"])}
+        {:ok, extract_model_ids(provider, models)}
 
       {:ok, %{status: status, body: body}} ->
         {:error, {:api_error, status, body}}
@@ -442,10 +442,16 @@ defmodule Arcanum.Adapters.OpenAI do
   end
 
   defp headers(provider) do
-    case Map.get(provider, :api_key) do
-      nil -> [{"content-type", "application/json"}]
-      "" -> [{"content-type", "application/json"}]
-      key -> [{"content-type", "application/json"}, {"authorization", "Bearer #{key}"}]
+    base =
+      case Map.get(provider, :api_key) do
+        nil -> [{"content-type", "application/json"}]
+        "" -> [{"content-type", "application/json"}]
+        key -> [{"content-type", "application/json"}, {"authorization", "Bearer #{key}"}]
+      end
+
+    case Map.get(provider, :extra_headers) do
+      nil -> base
+      extras when is_list(extras) -> base ++ extras
     end
   end
 
@@ -512,4 +518,22 @@ defmodule Arcanum.Adapters.OpenAI do
   end
 
   defp drain_async_body(body), do: body
+
+  # -------------------------------------------------------------------
+  # Model listing helpers
+  # -------------------------------------------------------------------
+
+  # Copilot returns extra metadata per model. Filter out models with
+  # policy state "disabled" but allow all others — the API only returns
+  # models the user has access to.
+  defp extract_model_ids(%{kind: "github-copilot"}, models) do
+    models
+    |> Enum.reject(fn m -> get_in(m, ["policy", "state"]) == "disabled" end)
+    |> Enum.map(& &1["id"])
+  end
+
+  # Standard OpenAI-compatible: just extract IDs.
+  defp extract_model_ids(_provider, models) do
+    Enum.map(models, & &1["id"])
+  end
 end

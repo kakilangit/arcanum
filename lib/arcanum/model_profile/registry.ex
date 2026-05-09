@@ -3,12 +3,10 @@ defmodule Arcanum.ModelProfile.Registry do
   Fetches and caches model capabilities from models.dev.
 
   Stores data in ETS for fast concurrent reads. Refreshes hourly.
-  Falls back gracefully — if fetch fails, the Resolver uses hardcoded defaults.
+  Falls back gracefully — if fetch fails, the Resolver uses provider defaults.
 
-  ## Providers
-
-  Only fetches and caches profiles for configured providers (default:
-  `["zai", "zhipuai", "deepseek", "openrouter"]`).
+  All provider kinds use models.dev IDs directly. Local-only providers
+  (ollama, vllm) are not in models.dev and rely on Resolver defaults.
   """
 
   use GenServer
@@ -19,8 +17,21 @@ defmodule Arcanum.ModelProfile.Registry do
   @refresh_interval :timer.hours(1)
   @fetch_timeout 15_000
   @models_dev_url "https://models.dev/api.json"
-  @default_providers ["zai", "zhipuai", "deepseek", "openrouter"]
   @max_models_per_provider 500
+
+  # Every provider kind that exists in models.dev.
+  # Local-only providers (ollama, vllm) are excluded.
+  @default_providers [
+    "openai",
+    "anthropic",
+    "deepseek",
+    "openrouter",
+    "xai",
+    "zai",
+    "zhipuai",
+    "github-copilot",
+    "lmstudio"
+  ]
 
   alias Arcanum.ModelProfile
 
@@ -31,7 +42,7 @@ defmodule Arcanum.ModelProfile.Registry do
   @doc """
   Looks up a model profile from the registry cache.
 
-  Returns `nil` if the model is not cached (caller should fall back to hardcoded).
+  Returns `nil` if the model is not cached (caller should fall back).
   """
   @spec lookup(String.t(), String.t()) :: ModelProfile.t() | nil
   def lookup(provider_kind, model) do
@@ -114,7 +125,6 @@ defmodule Arcanum.ModelProfile.Registry do
   end
 
   defp parse_and_store(data, providers) do
-    # Store which providers we have data for
     available = Enum.filter(providers, &Map.has_key?(data, &1))
     :ets.insert(@table, {:providers, available})
 
@@ -123,14 +133,14 @@ defmodule Arcanum.ModelProfile.Registry do
     |> Enum.sum()
   end
 
-  defp store_provider_models(data, provider_id) do
-    case Map.get(data, provider_id) do
+  defp store_provider_models(data, provider_kind) do
+    case Map.get(data, provider_kind) do
       %{"models" => models} when is_map(models) ->
         models
         |> Enum.take(@max_models_per_provider)
         |> Enum.each(fn {model_id, model_data} ->
           profile = build_profile(model_data)
-          :ets.insert(@table, {{provider_id, model_id}, profile})
+          :ets.insert(@table, {{provider_kind, model_id}, profile})
         end)
 
         min(map_size(models), @max_models_per_provider)
@@ -140,7 +150,8 @@ defmodule Arcanum.ModelProfile.Registry do
     end
   end
 
-  defp build_profile(model_data) do
+  @doc false
+  def build_profile(model_data) do
     %ModelProfile{
       supports_system_role: true,
       supports_tools: model_data["tool_call"] == true,
