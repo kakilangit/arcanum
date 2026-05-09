@@ -88,6 +88,16 @@ defmodule Arcanum.ModelProfile.Resolver do
 
   defp provider_default("zhipuai"), do: provider_default("zai")
 
+  defp provider_default("copilot") do
+    # Copilot proxies multiple models through an OpenAI-compatible API
+    %ModelProfile{
+      supports_system_role: true,
+      supports_tools: true,
+      tool_call_format: :native,
+      reasoning_field: nil
+    }
+  end
+
   defp provider_default(_unknown), do: ModelProfile.default()
 
   # -------------------------------------------------------------------
@@ -217,7 +227,13 @@ defmodule Arcanum.ModelProfile.Resolver do
       # Z.AI / Zhipu GLM — reasoning models with interleaved thinking
       "glm-4.7" => zai_thinking(),
       "glm-5" => zai_thinking(),
-      "glm-5.1" => zai_thinking()
+      "glm-5.1" => zai_thinking(),
+      # Copilot reasoning models
+      "o1" => %ModelProfile{ModelProfile.capable() | reasoning_field: :reasoning_content},
+      "claude-3.7-sonnet-thought" => %ModelProfile{
+        ModelProfile.capable()
+        | reasoning_field: :reasoning_content
+      }
     }
 
     # Enforce bounded collection
