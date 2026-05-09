@@ -17,7 +17,7 @@ defmodule Arcanum do
   def adapter_for(%{api_format: :custom, kind: "ollama"}), do: Ollama
 
   # Copilot uses OpenAI-compatible API with extra headers
-  def adapter_for(%{kind: "copilot"}), do: OpenAI
+  def adapter_for(%{kind: "github-copilot"}), do: OpenAI
 
   # Custom providers with openai/anthropic-compatible APIs
   def adapter_for(%{api_format: :custom}), do: OpenAI

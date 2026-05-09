@@ -526,7 +526,7 @@ defmodule Arcanum.Adapters.OpenAI do
   # Copilot returns extra metadata per model. Filter out models with
   # policy state "disabled" but allow all others — the API only returns
   # models the user has access to.
-  defp extract_model_ids(%{kind: "copilot"}, models) do
+  defp extract_model_ids(%{kind: "github-copilot"}, models) do
     models
     |> Enum.reject(fn m -> get_in(m, ["policy", "state"]) == "disabled" end)
     |> Enum.map(& &1["id"])

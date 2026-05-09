@@ -78,7 +78,7 @@ defmodule Arcanum.Gateway do
 
   # Copilot: inject required headers. The api_key is the GitHub OAuth
   # token obtained via device code flow — used directly as Bearer token.
-  defp resolve_auth(%{kind: "copilot"} = provider) do
+  defp resolve_auth(%{kind: "github-copilot"} = provider) do
     extra = Auth.Copilot.copilot_headers(Map.get(provider, :api_key, ""))
     Map.put(provider, :extra_headers, extra)
   end
