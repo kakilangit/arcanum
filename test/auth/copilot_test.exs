@@ -40,21 +40,39 @@ defmodule Arcanum.Auth.CopilotTest do
     test "returns access token when authorized" do
       Application.put_env(:arcanum, :http_client, Arcanum.Auth.CopilotTest.AuthorizedStub)
 
-      flow = %{device_code: "dc_test", user_code: "CODE", verification_uri: "https://github.com/login/device", interval: 0}
+      flow = %{
+        device_code: "dc_test",
+        user_code: "CODE",
+        verification_uri: "https://github.com/login/device",
+        interval: 0
+      }
+
       assert {:ok, "ghu_access_token_123"} = Copilot.poll_for_token(flow)
     end
 
     test "returns error on access denied" do
       Application.put_env(:arcanum, :http_client, Arcanum.Auth.CopilotTest.DeniedStub)
 
-      flow = %{device_code: "dc_test", user_code: "CODE", verification_uri: "https://github.com/login/device", interval: 0}
+      flow = %{
+        device_code: "dc_test",
+        user_code: "CODE",
+        verification_uri: "https://github.com/login/device",
+        interval: 0
+      }
+
       assert {:error, :access_denied} = Copilot.poll_for_token(flow)
     end
 
     test "returns error on expired token" do
       Application.put_env(:arcanum, :http_client, Arcanum.Auth.CopilotTest.ExpiredStub)
 
-      flow = %{device_code: "dc_test", user_code: "CODE", verification_uri: "https://github.com/login/device", interval: 0}
+      flow = %{
+        device_code: "dc_test",
+        user_code: "CODE",
+        verification_uri: "https://github.com/login/device",
+        interval: 0
+      }
+
       assert {:error, :device_code_expired} = Copilot.poll_for_token(flow)
     end
   end

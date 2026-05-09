@@ -76,9 +76,7 @@ defmodule Arcanum.ModelProfile.ResolverTest do
     end
 
     {:ok, pid} =
-      Registry.start_link(
-        providers: ["openai", "zai", "deepseek", "github-copilot"]
-      )
+      Registry.start_link(providers: ["openai", "zai", "deepseek", "github-copilot"])
 
     :sys.get_state(pid)
     Process.sleep(50)

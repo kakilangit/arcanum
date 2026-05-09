@@ -536,5 +536,4 @@ defmodule Arcanum.Adapters.OpenAI do
   defp extract_model_ids(_provider, models) do
     Enum.map(models, & &1["id"])
   end
-
 end
