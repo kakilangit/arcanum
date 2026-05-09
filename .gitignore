@@ -1,10 +1,16 @@
-/_build
-/cover
-/deps
-/doc
-/.fetch
+# The directory build artifacts
+/_build/
+/deps/
+
+# Generated on crash by the VM
 erl_crash.dump
-*.ez
-*.beam
-/config/*.secret.exs
+
+# Generated on mix hex.publish
+/arcanum-*.tar
+
+# Editor
 .elixir_ls/
+.vscode/
+
+# OS
+.DS_Store
