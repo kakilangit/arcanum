@@ -315,6 +315,24 @@ defmodule Arcanum.Adapters.OpenAI do
     end)
   end
 
+  # Streaming deltas: preserve `index` for merge, use "" default for
+  # argument concatenation (fragments arrive across multiple chunks).
+  defp parse_tool_call_deltas(nil), do: nil
+  defp parse_tool_call_deltas([]), do: nil
+
+  defp parse_tool_call_deltas(tool_calls) do
+    Enum.map(tool_calls, fn tc ->
+      %{
+        index: tc["index"],
+        id: tc["id"],
+        function: %{
+          name: get_in(tc, ["function", "name"]),
+          arguments: get_in(tc, ["function", "arguments"]) || ""
+        }
+      }
+    end)
+  end
+
   # -------------------------------------------------------------------
   # Retry middleware (bounded, adapter-internal)
   # -------------------------------------------------------------------
@@ -414,7 +432,7 @@ defmodule Arcanum.Adapters.OpenAI do
     %Response{
       content: delta["content"],
       thinking: delta["reasoning_content"],
-      tool_calls: parse_tool_calls(delta["tool_calls"]),
+      tool_calls: parse_tool_call_deltas(delta["tool_calls"]),
       usage: parse_usage(body["usage"]),
       finish_reason: choice["finish_reason"]
     }
