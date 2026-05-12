@@ -35,7 +35,7 @@ defmodule Arcanum.Integration.ProviderTest do
   # Tags: :integration (OpenAI-compat), :ollama, :anthropic
   # All excluded by default. Run with --include <tag>.
 
-  alias Arcanum.{Gateway, Intent, Response}
+  alias Arcanum.{Gateway, Intent, MediaIntent, MediaResponse, Response}
 
   @tool_weather %{
     type: "function",
@@ -77,7 +77,7 @@ defmodule Arcanum.Integration.ProviderTest do
     @tag timeout: 30_000
     test "simple chat completion", %{provider: provider, model: model} do
       intent = %Intent{
-        messages: [%{role: :user, content: "Reply with exactly: PONG"}],
+        messages: [%{role: :user, content: [%{type: :text, text: "Reply with exactly: PONG"}]}],
         model: model,
         temperature: 0.0
       }
@@ -89,7 +89,7 @@ defmodule Arcanum.Integration.ProviderTest do
     @tag timeout: 30_000
     test "chat with usage tracking", %{provider: provider, model: model} do
       intent = %Intent{
-        messages: [%{role: :user, content: "Say hello in one word"}],
+        messages: [%{role: :user, content: [%{type: :text, text: "Say hello in one word"}]}],
         model: model,
         temperature: 0.0
       }
@@ -103,7 +103,7 @@ defmodule Arcanum.Integration.ProviderTest do
     @tag timeout: 30_000
     test "tool call", %{provider: provider, model: model} do
       intent = %Intent{
-        messages: [%{role: :user, content: "What's the weather in Tokyo?"}],
+        messages: [%{role: :user, content: [%{type: :text, text: "What's the weather in Tokyo?"}]}],
         model: model,
         tools: [@tool_weather],
         temperature: 0.0
@@ -122,9 +122,9 @@ defmodule Arcanum.Integration.ProviderTest do
     @tag timeout: 30_000
     test "multi-turn conversation", %{provider: provider, model: model} do
       messages = [
-        %{role: :user, content: "My name is Arcanum."},
-        %{role: :assistant, content: "Nice to meet you, Arcanum!"},
-        %{role: :user, content: "What is my name? Reply with just the name."}
+        %{role: :user, content: [%{type: :text, text: "My name is Arcanum."}]},
+        %{role: :assistant, content: [%{type: :text, text: "Nice to meet you, Arcanum!"}]},
+        %{role: :user, content: [%{type: :text, text: "What is my name? Reply with just the name."}]}
       ]
 
       intent = %Intent{messages: messages, model: model, temperature: 0.0}
@@ -135,7 +135,7 @@ defmodule Arcanum.Integration.ProviderTest do
     @tag timeout: 60_000
     test "streaming", %{provider: provider, model: model} do
       intent = %Intent{
-        messages: [%{role: :user, content: "Count from 1 to 3"}],
+        messages: [%{role: :user, content: [%{type: :text, text: "Count from 1 to 3"}]}],
         model: model,
         temperature: 0.0
       }
@@ -158,6 +158,61 @@ defmodule Arcanum.Integration.ProviderTest do
           assert Enum.all?(models, &is_binary/1)
 
         {:error, _} ->
+          :ok
+      end
+    end
+
+    @tag timeout: 30_000
+    test "vision with image URL", %{provider: provider, model: model} do
+      image_path = Path.join([__DIR__, "..", "assets", "color_test.png"])
+      base64 = image_path |> File.read!() |> Base.encode64()
+
+      intent = %Intent{
+        messages: [
+          %{
+            role: :user,
+            content: [
+              %{type: :text, text: "What color is this image? Reply with one word."},
+              %{type: :image_base64, media_type: "image/png", data: base64}
+            ]
+          }
+        ],
+        model: model,
+        temperature: 0.0,
+        max_tokens: 50
+      }
+
+      assert {:ok, %Response{content: content}} = Gateway.chat(provider, intent)
+      assert is_binary(content)
+      assert String.length(content) > 0
+    end
+
+    @tag timeout: 60_000
+    test "image generation", %{provider: provider} do
+      intent = %MediaIntent{
+        model: "gpt-image-1",
+        prompt: "A solid red square on a white background",
+        size: "1024x1024",
+        n: 1,
+        quality: "low"
+      }
+
+      case Gateway.generate_image(provider, intent) do
+        {:ok, %MediaResponse{items: items}} ->
+          assert is_list(items)
+          assert length(items) >= 1
+
+          Enum.each(items, fn item ->
+            assert is_binary(item.data)
+            assert item.data != ""
+          end)
+
+        {:error, {:api_error, 403, _}} ->
+          # Account may not have image generation access
+          :ok
+
+        {:error, {:api_error, 429, _}} ->
+          # Rate limited
           :ok
       end
     end
@@ -184,7 +239,7 @@ defmodule Arcanum.Integration.ProviderTest do
     @tag timeout: 60_000
     test "simple chat completion", %{provider: provider, model: model} do
       intent = %Intent{
-        messages: [%{role: :user, content: "Reply with exactly: PONG"}],
+        messages: [%{role: :user, content: [%{type: :text, text: "Reply with exactly: PONG"}]}],
         model: model,
         temperature: 0.0
       }
@@ -223,7 +278,7 @@ defmodule Arcanum.Integration.ProviderTest do
     @tag timeout: 30_000
     test "simple chat completion", %{provider: provider, model: model} do
       intent = %Intent{
-        messages: [%{role: :user, content: "Reply with exactly: PONG"}],
+        messages: [%{role: :user, content: [%{type: :text, text: "Reply with exactly: PONG"}]}],
         model: model,
         temperature: 0.0,
         max_tokens: 100
@@ -236,7 +291,7 @@ defmodule Arcanum.Integration.ProviderTest do
     @tag timeout: 30_000
     test "tool call", %{provider: provider, model: model} do
       intent = %Intent{
-        messages: [%{role: :user, content: "What's the weather in Paris?"}],
+        messages: [%{role: :user, content: [%{type: :text, text: "What's the weather in Paris?"}]}],
         model: model,
         tools: [@tool_weather],
         temperature: 0.0,

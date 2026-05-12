@@ -26,6 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Anthropic adapter**: Async body draining for error responses (matches OpenAI adapter)
 - **Anthropic unit tests**: 14 tests covering system extraction, message formatting, tool definitions, response parsing, headers, URL construction
 - **README**: Anthropic added back to supported providers table
+- **README**: Comprehensive rewrite covering usage, configuration, profile resolution, and profile overrides
 
 ## [0.1.0] - 2026-05-12
 

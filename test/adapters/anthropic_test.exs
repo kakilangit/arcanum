@@ -34,8 +34,8 @@ defmodule Arcanum.Adapters.AnthropicTest do
     test "extracts atom :system role to top-level system param" do
       intent = %Intent{
         messages: [
-          %{role: :system, content: "You are helpful."},
-          %{role: :user, content: "Hi"}
+          %{role: :system, content: [%{type: :text, text: "You are helpful."}]},
+          %{role: :user, content: [%{type: :text, text: "Hi"}]}
         ],
         model: "claude-sonnet-4-20250514"
       }
@@ -52,8 +52,8 @@ defmodule Arcanum.Adapters.AnthropicTest do
     test "extracts string system role" do
       intent = %Intent{
         messages: [
-          %{role: "system", content: "Be concise."},
-          %{role: :user, content: "Hi"}
+          %{role: "system", content: [%{type: :text, text: "Be concise."}]},
+          %{role: :user, content: [%{type: :text, text: "Hi"}]}
         ],
         model: "claude-sonnet-4-20250514"
       }
@@ -68,9 +68,9 @@ defmodule Arcanum.Adapters.AnthropicTest do
     test "merges multiple system messages at front" do
       intent = %Intent{
         messages: [
-          %{role: :system, content: "First instruction."},
-          %{role: :system, content: "Second instruction."},
-          %{role: :user, content: "Hi"}
+          %{role: :system, content: [%{type: :text, text: "First instruction."}]},
+          %{role: :system, content: [%{type: :text, text: "Second instruction."}]},
+          %{role: :user, content: [%{type: :text, text: "Hi"}]}
         ],
         model: "claude-sonnet-4-20250514"
       }
@@ -84,7 +84,7 @@ defmodule Arcanum.Adapters.AnthropicTest do
 
     test "no system param when no system messages" do
       intent = %Intent{
-        messages: [%{role: :user, content: "Hi"}],
+        messages: [%{role: :user, content: [%{type: :text, text: "Hi"}]}],
         model: "claude-sonnet-4-20250514"
       }
 
@@ -104,9 +104,9 @@ defmodule Arcanum.Adapters.AnthropicTest do
     test "converts atom roles to strings" do
       intent = %Intent{
         messages: [
-          %{role: :user, content: "Hello"},
-          %{role: :assistant, content: "Hi there"},
-          %{role: :user, content: "How are you?"}
+          %{role: :user, content: [%{type: :text, text: "Hello"}]},
+          %{role: :assistant, content: [%{type: :text, text: "Hi there"}]},
+          %{role: :user, content: [%{type: :text, text: "How are you?"}]}
         ],
         model: "claude-sonnet-4-20250514"
       }
@@ -122,7 +122,7 @@ defmodule Arcanum.Adapters.AnthropicTest do
     test "formats tool results as user role with tool_result content blocks" do
       intent = %Intent{
         messages: [
-          %{role: :user, content: "What's the weather?"},
+          %{role: :user, content: [%{type: :text, text: "What's the weather?"}]},
           %{
             role: :assistant,
             content: nil,
@@ -130,8 +130,8 @@ defmodule Arcanum.Adapters.AnthropicTest do
               %{id: "tc_1", function: %{name: "get_weather", arguments: ~s({"city":"Tokyo"})}}
             ]
           },
-          %{role: :tool, content: "Tokyo: 22°C, sunny", tool_call_id: "tc_1"},
-          %{role: :user, content: "Thanks!"}
+          %{role: :tool, content: [%{type: :text, text: "Tokyo: 22°C, sunny"}], tool_call_id: "tc_1"},
+          %{role: :user, content: [%{type: :text, text: "Thanks!"}]}
         ],
         model: "claude-sonnet-4-20250514"
       }
@@ -157,15 +157,15 @@ defmodule Arcanum.Adapters.AnthropicTest do
     test "formats assistant tool_calls as tool_use content blocks" do
       intent = %Intent{
         messages: [
-          %{role: :user, content: "Weather?"},
+          %{role: :user, content: [%{type: :text, text: "Weather?"}]},
           %{
             role: :assistant,
-            content: "Let me check.",
+            content: [%{type: :text, text: "Let me check."}],
             tool_calls: [
               %{id: "tc_1", function: %{name: "get_weather", arguments: ~s({"city":"Berlin"})}}
             ]
           },
-          %{role: :tool, content: "Berlin: 15°C", tool_call_id: "tc_1"}
+          %{role: :tool, content: [%{type: :text, text: "Berlin: 15°C"}], tool_call_id: "tc_1"}
         ],
         model: "claude-sonnet-4-20250514"
       }
@@ -195,7 +195,7 @@ defmodule Arcanum.Adapters.AnthropicTest do
       # and must be merged for Anthropic's alternating role requirement
       intent = %Intent{
         messages: [
-          %{role: :user, content: "Check weather in two cities"},
+          %{role: :user, content: [%{type: :text, text: "Check weather in two cities"}]},
           %{
             role: :assistant,
             content: nil,
@@ -204,8 +204,8 @@ defmodule Arcanum.Adapters.AnthropicTest do
               %{id: "tc_2", function: %{name: "get_weather", arguments: ~s({"city":"Berlin"})}}
             ]
           },
-          %{role: :tool, content: "Tokyo: 22°C", tool_call_id: "tc_1"},
-          %{role: :tool, content: "Berlin: 15°C", tool_call_id: "tc_2"}
+          %{role: :tool, content: [%{type: :text, text: "Tokyo: 22°C"}], tool_call_id: "tc_1"},
+          %{role: :tool, content: [%{type: :text, text: "Berlin: 15°C"}], tool_call_id: "tc_2"}
         ],
         model: "claude-sonnet-4-20250514"
       }
@@ -246,7 +246,7 @@ defmodule Arcanum.Adapters.AnthropicTest do
       }
 
       intent = %Intent{
-        messages: [%{role: :user, content: "Weather?"}],
+        messages: [%{role: :user, content: [%{type: :text, text: "Weather?"}]}],
         model: "claude-sonnet-4-20250514",
         tools: [tool]
       }
@@ -269,7 +269,7 @@ defmodule Arcanum.Adapters.AnthropicTest do
   describe "response parsing" do
     test "parses text response" do
       intent = %Intent{
-        messages: [%{role: :user, content: "Hi"}],
+        messages: [%{role: :user, content: [%{type: :text, text: "Hi"}]}],
         model: "claude-sonnet-4-20250514"
       }
 
@@ -286,7 +286,7 @@ defmodule Arcanum.Adapters.AnthropicTest do
       Process.put(:mock_response, :tool_use)
 
       intent = %Intent{
-        messages: [%{role: :user, content: "Weather?"}],
+        messages: [%{role: :user, content: [%{type: :text, text: "Weather?"}]}],
         model: "claude-sonnet-4-20250514",
         tools: [
           %{
@@ -314,7 +314,7 @@ defmodule Arcanum.Adapters.AnthropicTest do
   describe "headers" do
     test "includes x-api-key and anthropic-version" do
       intent = %Intent{
-        messages: [%{role: :user, content: "Hi"}],
+        messages: [%{role: :user, content: [%{type: :text, text: "Hi"}]}],
         model: "claude-sonnet-4-20250514"
       }
 
@@ -330,7 +330,7 @@ defmodule Arcanum.Adapters.AnthropicTest do
       provider = %{@provider | api_key: nil}
 
       intent = %Intent{
-        messages: [%{role: :user, content: "Hi"}],
+        messages: [%{role: :user, content: [%{type: :text, text: "Hi"}]}],
         model: "claude-sonnet-4-20250514"
       }
 
@@ -351,7 +351,7 @@ defmodule Arcanum.Adapters.AnthropicTest do
       provider = %{@provider | base_url: "https://api.anthropic.com/v1"}
 
       intent = %Intent{
-        messages: [%{role: :user, content: "Hi"}],
+        messages: [%{role: :user, content: [%{type: :text, text: "Hi"}]}],
         model: "claude-sonnet-4-20250514"
       }
 

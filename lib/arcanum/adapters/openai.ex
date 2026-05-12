@@ -17,6 +17,8 @@ defmodule Arcanum.Adapters.OpenAI do
 
   alias Arcanum.{Intent, MediaIntent, MediaResponse, ModelProfile, Response}
 
+  require Logger
+
   @receive_timeout :timer.minutes(5)
   @max_retry_attempts 3
   @retriable_statuses [429, 502, 503, 529]
@@ -24,12 +26,11 @@ defmodule Arcanum.Adapters.OpenAI do
   @context_overflow_patterns [
     "context_length_exceeded",
     "maximum context length",
-    "token limit",
     "too many tokens",
     "context window",
-    "max_tokens",
     "input is too long",
-    "request too large"
+    "request too large",
+    "token limit"
   ]
 
   @impl true
@@ -519,14 +520,22 @@ defmodule Arcanum.Adapters.OpenAI do
   defp non_blank(s) when is_binary(s) and s != "", do: String.trim(s)
   defp non_blank(_), do: nil
 
-  defp classify_api_error(status, body) do
+  defp classify_api_error(status, body) when status in [400, 413] do
     error_message = extract_error_message(body)
 
     if context_overflow?(error_message) do
+      Logger.warning("Context overflow detected (HTTP #{status}): #{error_message}")
       {:error, :context_overflow}
     else
+      Logger.warning("API error (HTTP #{status}): #{error_message}")
       {:error, {:api_error, status, body}}
     end
+  end
+
+  defp classify_api_error(status, body) do
+    error_message = extract_error_message(body)
+    Logger.warning("API error (HTTP #{status}): #{error_message}")
+    {:error, {:api_error, status, body}}
   end
 
   defp context_overflow?(nil), do: false
