@@ -1,16 +1,15 @@
 defmodule Arcanum.Provider do
   @moduledoc """
-  Behaviour for LLM inference providers.
+  Behaviour for inference provider adapters.
 
   Each adapter (Ollama, OpenAI, Anthropic, etc.) implements this behaviour
-  to provide a uniform interface for chat completion and model listing.
+  to provide a uniform interface for chat completion, model listing,
+  and media generation.
 
-  Adapters receive a `ModelProfile` that declares model capabilities upfront.
-  All provider/model-specific serialization decisions are driven by the profile —
-  no runtime detection, no retry-on-error branching.
+  All provider/model-specific serialization decisions are driven by `ModelProfile`.
   """
 
-  alias Arcanum.{Intent, ModelProfile, Response}
+  alias Arcanum.{Intent, MediaIntent, MediaResponse, ModelProfile, Response}
 
   @type stream_event :: {:data, Response.t()} | {:error, term()} | :done
 
@@ -22,7 +21,6 @@ defmodule Arcanum.Provider do
 
   @doc """
   Sends a streaming chat completion request.
-
   Returns a stream of `{:data, response}` events, terminated by `:done`.
   """
   @callback stream(provider :: map(), intent :: Intent.t(), profile :: ModelProfile.t()) ::
@@ -40,5 +38,25 @@ defmodule Arcanum.Provider do
   @callback embed(provider :: map(), model :: String.t(), input :: String.t()) ::
               {:ok, [float()]} | {:error, term()}
 
-  @optional_callbacks [embed: 3]
+  @doc """
+  Generates images from a text prompt.
+  """
+  @callback generate_image(
+              provider :: map(),
+              intent :: MediaIntent.t(),
+              profile :: ModelProfile.t()
+            ) ::
+              {:ok, MediaResponse.t()} | {:error, term()}
+
+  @doc """
+  Generates videos from a text prompt.
+  """
+  @callback generate_video(
+              provider :: map(),
+              intent :: MediaIntent.t(),
+              profile :: ModelProfile.t()
+            ) ::
+              {:ok, MediaResponse.t()} | {:error, term()}
+
+  @optional_callbacks [embed: 3, generate_image: 3, generate_video: 3]
 end

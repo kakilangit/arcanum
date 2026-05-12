@@ -2,25 +2,25 @@ defmodule Arcanum.Adapters.OpenAI do
   @moduledoc """
   Inference adapter for OpenAI-compatible APIs.
 
-  Handles wire protocol translation only:
-  - Request serialization (messages, tools, provider routing)
+  Handles wire protocol translation:
+  - Request serialization (messages, tools, provider routing, multimodal content)
   - System role demotion at serialization time (profile-driven)
-  - Response parsing (faithful field mapping, no model-specific fallbacks)
+  - Response parsing (faithful field mapping)
+  - Image generation via `/images/generations`
   - Retry on transient HTTP errors (429, 502, 503, 529)
 
-  Model-specific normalization (content fallback from thinking, XML tool-call
-  extraction) is handled by `Response.Normalizer` in the Gateway layer.
+  Model-specific normalization (content fallback, XML tool-call extraction)
+  is handled by `Response.Normalizer` in the Gateway layer.
   """
 
   @behaviour Arcanum.Provider
 
-  alias Arcanum.{Intent, ModelProfile, Response}
+  alias Arcanum.{Intent, MediaIntent, MediaResponse, ModelProfile, Response}
 
   @receive_timeout :timer.minutes(5)
   @max_retry_attempts 3
   @retriable_statuses [429, 502, 503, 529]
 
-  # Patterns that indicate context window overflow across providers
   @context_overflow_patterns [
     "context_length_exceeded",
     "maximum context length",
@@ -31,10 +31,6 @@ defmodule Arcanum.Adapters.OpenAI do
     "input is too long",
     "request too large"
   ]
-
-  # -------------------------------------------------------------------
-  # Public API
-  # -------------------------------------------------------------------
 
   @impl true
   def chat(provider, %Intent{} = intent, %ModelProfile{} = profile) do
@@ -108,11 +104,32 @@ defmodule Arcanum.Adapters.OpenAI do
     end
   end
 
-  # -------------------------------------------------------------------
-  # Request body construction (profile-driven, no branching in callers)
-  # -------------------------------------------------------------------
+  @impl true
+  def generate_image(provider, %MediaIntent{} = intent, %ModelProfile{}) do
+    body =
+      %{model: intent.model, prompt: intent.prompt, n: intent.n, size: intent.size}
+      |> maybe_put(:quality, intent.quality)
+      |> maybe_put(:style, intent.style)
+      |> maybe_put(:output_format, intent.format)
 
-  defp build_chat_body(%Intent{} = intent, _provider, %ModelProfile{} = profile) do
+    case http_client().post(base_url(provider, "/images/generations"),
+           json: body,
+           headers: headers(provider),
+           receive_timeout: @receive_timeout
+         ) do
+      {:ok, %{status: 200, body: %{"data" => items}}} ->
+        {:ok, %MediaResponse{items: parse_image_items(items, intent.format)}}
+
+      {:ok, %{status: status, body: body}} ->
+        {:error, {:api_error, status, body}}
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
+  @doc false
+  def build_chat_body(%Intent{} = intent, _provider, %ModelProfile{} = profile) do
     {messages, tools} = prepare_tools(intent, profile)
     messages = format_messages(messages, profile)
 
@@ -125,41 +142,28 @@ defmodule Arcanum.Adapters.OpenAI do
     apply_provider_routing(body, profile)
   end
 
-  # Native tool-calling: pass tools as API parameter.
   defp prepare_tools(%Intent{tools: nil} = intent, _profile), do: {intent.messages, nil}
   defp prepare_tools(%Intent{tools: []} = intent, _profile), do: {intent.messages, nil}
 
   defp prepare_tools(%Intent{} = intent, %ModelProfile{supports_tools: true}),
     do: {intent.messages, intent.tools}
 
-  # Non-native: inject tool definitions into the messages as a system prompt
-  # so the model can see them, and omit the native tools parameter.
   defp prepare_tools(%Intent{tools: tools} = intent, %ModelProfile{supports_tools: false}) do
     tool_schema = Jason.encode!(tools)
-    tool_message = %{role: :system, content: "Available tools:\n#{tool_schema}"}
+    tool_message = %{role: :system, content: Intent.text("Available tools:\n#{tool_schema}")}
 
     {system, rest} = Enum.split_while(intent.messages, &(Map.get(&1, :role) == :system))
     {system ++ [tool_message] ++ rest, nil}
   end
 
-  # Profile declares routing metadata; no provider kind checking.
   defp apply_provider_routing(body, %{provider_routing: nil}), do: body
 
   defp apply_provider_routing(body, %{provider_routing: routing}) when is_map(routing) do
-    if Map.has_key?(body, :tools) do
-      Map.merge(body, routing)
-    else
-      body
-    end
+    if Map.has_key?(body, :tools), do: Map.merge(body, routing), else: body
   end
 
-  # Inject thinking parameter for models that require explicit opt-in (Z.AI GLM-4.7+).
   defp apply_thinking_param(body, %{thinking_param: nil}), do: body
   defp apply_thinking_param(body, %{thinking_param: param}), do: Map.put(body, :thinking, param)
-
-  # -------------------------------------------------------------------
-  # Message formatting (system role demotion at serialization time)
-  # -------------------------------------------------------------------
 
   defp format_messages(messages, profile) when is_list(messages) do
     messages
@@ -167,10 +171,6 @@ defmodule Arcanum.Adapters.OpenAI do
     |> Enum.flat_map(&format_message(&1, profile))
   end
 
-  # For models that use reasoning_content (DeepSeek V4, GLM-4.7+):
-  # When preserve_reasoning is true (interleaved thinking): keep reasoning on all messages.
-  # Otherwise: strip reasoning from all but the last assistant message to save context,
-  # and backfill empty reasoning_content on assistant messages that lack it.
   defp apply_reasoning_transforms(messages, %{
          reasoning_field: :reasoning_content,
          preserve_reasoning: true
@@ -182,11 +182,11 @@ defmodule Arcanum.Adapters.OpenAI do
   end
 
   defp apply_reasoning_transforms(messages, %{reasoning_field: :reasoning_content}) do
-    last_assistant_idx = find_last_assistant_index(messages)
+    last_idx = find_last_assistant_index(messages)
 
     messages
     |> Enum.with_index()
-    |> Enum.map(fn {msg, idx} -> transform_reasoning(msg, idx, last_assistant_idx) end)
+    |> Enum.map(fn {msg, idx} -> transform_reasoning(msg, idx, last_idx) end)
   end
 
   defp apply_reasoning_transforms(messages, _profile), do: messages
@@ -194,7 +194,7 @@ defmodule Arcanum.Adapters.OpenAI do
   defp find_last_assistant_index(messages) do
     messages
     |> Enum.with_index()
-    |> Enum.filter(fn {msg, _idx} -> msg[:role] == :assistant end)
+    |> Enum.filter(fn {msg, _} -> msg[:role] == :assistant end)
     |> List.last()
     |> case do
       {_msg, idx} -> idx
@@ -202,25 +202,25 @@ defmodule Arcanum.Adapters.OpenAI do
     end
   end
 
-  # Keep reasoning on the last assistant message, backfill if missing
   defp transform_reasoning(%{role: :assistant} = msg, idx, idx),
     do: Map.put_new(msg, :thinking, "")
 
-  # Strip reasoning from older assistant messages
   defp transform_reasoning(%{role: :assistant} = msg, _idx, _last_idx),
     do: Map.put(msg, :thinking, "")
 
   defp transform_reasoning(msg, _idx, _last_idx), do: msg
 
   defp format_message(%{role: :system} = msg, %{supports_system_role: false}) do
-    [%{role: "user", content: "[System Instructions]\n\n#{msg[:content] || ""}"}]
+    [%{role: "user", content: "[System Instructions]\n\n#{Intent.to_text(msg.content)}"}]
   end
 
   defp format_message(%{role: :tool} = msg, _profile) do
+    content = Intent.to_text(msg[:content] || [])
+
     [
       %{
         role: "tool",
-        content: to_string(msg[:content] || ""),
+        content: content,
         tool_call_id: to_string(msg[:tool_call_id])
       }
     ]
@@ -228,14 +228,14 @@ defmodule Arcanum.Adapters.OpenAI do
 
   defp format_message(%{role: :assistant, tool_calls: tool_calls} = msg, _profile)
        when is_list(tool_calls) and tool_calls != [] do
-    content = msg[:content]
+    content = Intent.to_text(msg[:content] || [])
     has_thinking = is_binary(msg[:thinking]) and msg[:thinking] != ""
 
     if has_thinking do
       combined =
         %{
           role: "assistant",
-          content: to_string(content || ""),
+          content: content,
           tool_calls: Enum.map(tool_calls, &format_tool_call/1)
         }
         |> add_reasoning_content(msg)
@@ -243,23 +243,19 @@ defmodule Arcanum.Adapters.OpenAI do
       [combined]
     else
       text_msg =
-        if is_binary(content) and String.trim(content) != "" do
+        if content != "" do
           [%{role: "assistant", content: content}]
         else
           []
         end
 
-      tool_msg = %{
-        role: "assistant",
-        tool_calls: Enum.map(tool_calls, &format_tool_call/1)
-      }
-
+      tool_msg = %{role: "assistant", tool_calls: Enum.map(tool_calls, &format_tool_call/1)}
       text_msg ++ [tool_msg]
     end
   end
 
   defp format_message(%{role: role} = msg, _profile) do
-    base = %{role: to_string(role), content: to_string(msg[:content] || "")}
+    base = %{role: to_string(role), content: serialize_content(msg[:content] || [])}
     [add_reasoning_content(base, msg)]
   end
 
@@ -283,9 +279,29 @@ defmodule Arcanum.Adapters.OpenAI do
 
   defp format_tool_call(tc), do: tc
 
-  # -------------------------------------------------------------------
-  # Response parsing — pure protocol translation, no model-specific logic
-  # -------------------------------------------------------------------
+  @doc """
+  Serializes content blocks to OpenAI wire format.
+
+  Text-only messages are sent as a plain string (single text block optimization).
+  Mixed content is sent as an array of typed objects.
+  """
+  def serialize_content([%{type: :text, text: text}]), do: text
+
+  def serialize_content(blocks) when is_list(blocks) and blocks != [] do
+    Enum.map(blocks, fn
+      %{type: :text, text: text} ->
+        %{"type" => "text", "text" => text}
+
+      %{type: :image_url, url: url} ->
+        %{"type" => "image_url", "image_url" => %{"url" => url}}
+
+      %{type: :image_base64, media_type: mt, data: data} ->
+        %{"type" => "image_url", "image_url" => %{"url" => "data:#{mt};base64,#{data}"}}
+    end)
+  end
+
+  def serialize_content([]), do: ""
+  def serialize_content(nil), do: ""
 
   defp parse_chat_response(body) do
     choice = List.first(body["choices"] || []) || %{}
@@ -315,8 +331,6 @@ defmodule Arcanum.Adapters.OpenAI do
     end)
   end
 
-  # Streaming deltas: preserve `index` for merge, use "" default for
-  # argument concatenation (fragments arrive across multiple chunks).
   defp parse_tool_call_deltas(nil), do: nil
   defp parse_tool_call_deltas([]), do: nil
 
@@ -333,9 +347,26 @@ defmodule Arcanum.Adapters.OpenAI do
     end)
   end
 
-  # -------------------------------------------------------------------
-  # Retry middleware (bounded, adapter-internal)
-  # -------------------------------------------------------------------
+  defp parse_image_items(items, format) do
+    content_type = format_to_content_type(format)
+
+    Enum.map(items, fn item ->
+      %{
+        data: decode_image_data(item),
+        url: item["url"],
+        revised_prompt: item["revised_prompt"],
+        content_type: content_type
+      }
+    end)
+  end
+
+  defp decode_image_data(%{"b64_json" => data}) when is_binary(data), do: Base.decode64!(data)
+  defp decode_image_data(_), do: nil
+
+  defp format_to_content_type("png"), do: "image/png"
+  defp format_to_content_type("jpeg"), do: "image/jpeg"
+  defp format_to_content_type("webp"), do: "image/webp"
+  defp format_to_content_type(_), do: "image/png"
 
   defp retry_chat(_provider, _body, attempt) when attempt >= @max_retry_attempts do
     {:error, {:api_error, :max_retries_exceeded}}
@@ -386,10 +417,6 @@ defmodule Arcanum.Adapters.OpenAI do
     Process.sleep(delay)
   end
 
-  # -------------------------------------------------------------------
-  # SSE stream parsing
-  # -------------------------------------------------------------------
-
   defp parse_sse_stream(stream) do
     Stream.transform(stream, :cont, fn
       chunk, :cont ->
@@ -437,10 +464,6 @@ defmodule Arcanum.Adapters.OpenAI do
       finish_reason: choice["finish_reason"]
     }
   end
-
-  # -------------------------------------------------------------------
-  # HTTP helpers
-  # -------------------------------------------------------------------
 
   defp do_request(provider, body) do
     http_client().post(base_url(provider, "/chat/completions"),
@@ -496,7 +519,6 @@ defmodule Arcanum.Adapters.OpenAI do
   defp non_blank(s) when is_binary(s) and s != "", do: String.trim(s)
   defp non_blank(_), do: nil
 
-  # Classifies API errors, detecting context overflow from error messages.
   defp classify_api_error(status, body) do
     error_message = extract_error_message(body)
 
@@ -518,9 +540,6 @@ defmodule Arcanum.Adapters.OpenAI do
   defp extract_error_message(body) when is_binary(body), do: body
   defp extract_error_message(_), do: nil
 
-  # When `into: :self` is used and the response is non-200, the body is a
-  # Req.Response.Async struct (Enumerable) rather than decoded JSON.
-  # Drain it in-process and attempt JSON decode.
   defp drain_async_body(%Req.Response.Async{} = async) do
     raw =
       async
@@ -537,21 +556,16 @@ defmodule Arcanum.Adapters.OpenAI do
 
   defp drain_async_body(body), do: body
 
-  # -------------------------------------------------------------------
-  # Model listing helpers
-  # -------------------------------------------------------------------
-
-  # Copilot returns extra metadata per model. Filter out models with
-  # policy state "disabled" but allow all others — the API only returns
-  # models the user has access to.
   defp extract_model_ids(%{kind: "github-copilot"}, models) do
     models
     |> Enum.reject(fn m -> get_in(m, ["policy", "state"]) == "disabled" end)
     |> Enum.map(& &1["id"])
   end
 
-  # Standard OpenAI-compatible: just extract IDs.
   defp extract_model_ids(_provider, models) do
     Enum.map(models, & &1["id"])
   end
+
+  defp maybe_put(map, _key, nil), do: map
+  defp maybe_put(map, key, value), do: Map.put(map, key, value)
 end

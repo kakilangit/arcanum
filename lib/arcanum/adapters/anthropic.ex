@@ -5,11 +5,10 @@ defmodule Arcanum.Adapters.Anthropic do
   Handles Anthropic-specific wire format:
   - System prompt as top-level parameter (not a message)
   - Content blocks for text, tool_use, tool_result, thinking
-  - Tool definitions as `name/description/input_schema` (not OpenAI function format)
-  - Roles as strings, only `"user"` and `"assistant"` allowed in messages
+  - Tool definitions as `name/description/input_schema`
+  - Only `"user"` and `"assistant"` roles allowed in messages
   - Tool results sent as `"user"` role with `tool_result` content blocks
-
-  Profile-driven: uses `ModelProfile` for capability checks, same as OpenAI adapter.
+  - Multimodal content blocks (text + images)
   """
 
   @behaviour Arcanum.Provider
@@ -20,10 +19,6 @@ defmodule Arcanum.Adapters.Anthropic do
   @receive_timeout :timer.minutes(5)
   @max_retry_attempts 3
   @retriable_statuses [429, 502, 503, 529]
-
-  # -------------------------------------------------------------------
-  # Public API
-  # -------------------------------------------------------------------
 
   @impl true
   def chat(provider, %Intent{} = intent, %ModelProfile{} = profile) do
@@ -77,16 +72,11 @@ defmodule Arcanum.Adapters.Anthropic do
     end
   end
 
-  # -------------------------------------------------------------------
-  # Request body construction (profile-driven)
-  # -------------------------------------------------------------------
-
   defp build_chat_body(%Intent{} = intent, %ModelProfile{} = profile) do
     {system, messages} = extract_system(intent.messages)
     messages = format_messages(messages, profile)
 
     body = %{model: intent.model, messages: messages}
-
     body = if system, do: Map.put(body, :system, system), else: body
 
     body =
@@ -94,18 +84,13 @@ defmodule Arcanum.Adapters.Anthropic do
         do: Map.put(body, :tools, to_anthropic_tools(intent.tools)),
         else: body
 
-    body =
-      if intent.temperature, do: Map.put(body, :temperature, intent.temperature), else: body
+    body = if intent.temperature, do: Map.put(body, :temperature, intent.temperature), else: body
 
-    body =
-      if intent.max_tokens,
-        do: Map.put(body, :max_tokens, intent.max_tokens),
-        else: Map.put(body, :max_tokens, 4096)
-
-    body
+    if intent.max_tokens,
+      do: Map.put(body, :max_tokens, intent.max_tokens),
+      else: Map.put(body, :max_tokens, 4096)
   end
 
-  # Extract system messages (atom or string role) from the front
   defp extract_system(messages) do
     {system_msgs, rest} = Enum.split_while(messages, &system_role?/1)
 
@@ -116,7 +101,7 @@ defmodule Arcanum.Adapters.Anthropic do
       msgs ->
         combined =
           msgs
-          |> Enum.map_join("\n\n", &to_string(Map.get(&1, :content, "")))
+          |> Enum.map_join("\n\n", fn msg -> Intent.to_text(msg[:content] || []) end)
 
         {combined, rest}
     end
@@ -126,64 +111,46 @@ defmodule Arcanum.Adapters.Anthropic do
   defp system_role?(%{role: "system"}), do: true
   defp system_role?(_), do: false
 
-  # -------------------------------------------------------------------
-  # Message formatting — Anthropic wire format
-  #
-  # Anthropic only allows "user" and "assistant" roles.
-  # Tool results must be "user" role with tool_result content blocks.
-  # Assistant tool calls must be content blocks (not tool_calls key).
-  # -------------------------------------------------------------------
-
   defp format_messages(messages, profile) do
     messages
     |> Enum.flat_map(&format_message(&1, profile))
     |> merge_adjacent_roles()
   end
 
-  # System messages that weren't at the front — inject as user message
   defp format_message(%{role: role} = msg, _profile) when role in [:system, "system"] do
-    [%{role: "user", content: "[System] #{msg[:content] || ""}"}]
+    [%{role: "user", content: "[System] #{Intent.to_text(msg[:content] || [])}"}]
   end
 
-  # Tool result messages → user role with tool_result content blocks
   defp format_message(%{role: role} = msg, _profile) when role in [:tool, "tool"] do
-    content = to_string(msg[:content] || "")
+    content = Intent.to_text(msg[:content] || [])
     tool_call_id = to_string(msg[:tool_call_id] || "")
-
     block = %{type: "tool_result", tool_use_id: tool_call_id, content: content}
-
     [%{role: "user", content: [block]}]
   end
 
-  # Assistant with tool_calls → content blocks (text + tool_use)
   defp format_message(%{role: role, tool_calls: tool_calls} = msg, _profile)
        when role in [:assistant, "assistant"] and is_list(tool_calls) and tool_calls != [] do
-    text_blocks = text_content_block(msg[:content])
+    text_blocks = text_content_blocks(msg[:content])
     tool_blocks = Enum.map(tool_calls, &to_tool_use_block/1)
-
     [%{role: "assistant", content: text_blocks ++ tool_blocks}]
   end
 
-  # Plain assistant message
   defp format_message(%{role: role} = msg, _profile) when role in [:assistant, "assistant"] do
-    [%{role: "assistant", content: to_string(msg[:content] || "")}]
+    [%{role: "assistant", content: Intent.to_text(msg[:content] || [])}]
   end
 
-  # User message
   defp format_message(%{role: role} = msg, _profile) when role in [:user, "user"] do
-    [%{role: "user", content: to_string(msg[:content] || "")}]
+    [%{role: "user", content: serialize_content(msg[:content] || [])}]
   end
 
-  # Fallback — treat as user
   defp format_message(msg, _profile) do
-    [%{role: "user", content: to_string(msg[:content] || "")}]
+    [%{role: "user", content: serialize_content(msg[:content] || [])}]
   end
 
-  defp text_content_block(text) when is_binary(text) and text != "" do
-    [%{type: "text", text: text}]
+  defp text_content_blocks(content) do
+    text = Intent.to_text(content || [])
+    if text != "", do: [%{type: "text", text: text}], else: []
   end
-
-  defp text_content_block(_), do: []
 
   defp to_tool_use_block(call) do
     func = call[:function] || call.function
@@ -207,8 +174,30 @@ defmodule Arcanum.Adapters.Anthropic do
   defp decode_arguments(args) when is_map(args), do: args
   defp decode_arguments(_), do: %{}
 
-  # Anthropic requires alternating user/assistant roles.
-  # Merge adjacent messages with the same role into one.
+  @doc """
+  Serializes content blocks to Anthropic wire format.
+
+  Text-only messages are sent as a plain string (single text block optimization).
+  Mixed content (text + images) is sent as an array of typed objects.
+  """
+  def serialize_content([%{type: :text, text: text}]), do: text
+
+  def serialize_content(blocks) when is_list(blocks) and blocks != [] do
+    Enum.map(blocks, fn
+      %{type: :text, text: text} ->
+        %{type: "text", text: text}
+
+      %{type: :image_url, url: url} ->
+        %{type: "image", source: %{type: "url", url: url}}
+
+      %{type: :image_base64, media_type: mt, data: data} ->
+        %{type: "image", source: %{type: "base64", media_type: mt, data: data}}
+    end)
+  end
+
+  def serialize_content([]), do: ""
+  def serialize_content(nil), do: ""
+
   defp merge_adjacent_roles([]), do: []
 
   defp merge_adjacent_roles(messages) do
@@ -231,10 +220,6 @@ defmodule Arcanum.Adapters.Anthropic do
     %{role: role, content: merged_content}
   end
 
-  # -------------------------------------------------------------------
-  # Tool format conversion (OpenAI → Anthropic)
-  # -------------------------------------------------------------------
-
   defp to_anthropic_tools(tools) do
     Enum.map(tools, fn tool ->
       func = tool[:function] || tool.function
@@ -246,10 +231,6 @@ defmodule Arcanum.Adapters.Anthropic do
       }
     end)
   end
-
-  # -------------------------------------------------------------------
-  # Response parsing
-  # -------------------------------------------------------------------
 
   defp parse_chat_response(body) do
     %Response{
@@ -312,22 +293,13 @@ defmodule Arcanum.Adapters.Anthropic do
   defp parse_usage(usage) do
     input = usage["input_tokens"] || 0
     output = usage["output_tokens"] || 0
-
-    %{
-      prompt_tokens: input,
-      completion_tokens: output,
-      total_tokens: input + output
-    }
+    %{prompt_tokens: input, completion_tokens: output, total_tokens: input + output}
   end
 
   defp map_stop_reason("end_turn"), do: "stop"
   defp map_stop_reason("tool_use"), do: "tool_calls"
   defp map_stop_reason("max_tokens"), do: "length"
   defp map_stop_reason(other), do: other
-
-  # -------------------------------------------------------------------
-  # Retry middleware (bounded)
-  # -------------------------------------------------------------------
 
   defp retry_chat(_provider, _body, attempt) when attempt >= @max_retry_attempts do
     {:error, {:api_error, :max_retries_exceeded}}
@@ -377,10 +349,6 @@ defmodule Arcanum.Adapters.Anthropic do
     delay = min(:timer.seconds(2) * Integer.pow(2, attempt - 1), :timer.seconds(30))
     Process.sleep(delay)
   end
-
-  # -------------------------------------------------------------------
-  # SSE stream parsing
-  # -------------------------------------------------------------------
 
   defp parse_sse_stream(stream) do
     Stream.transform(stream, :cont, fn
@@ -434,12 +402,7 @@ defmodule Arcanum.Adapters.Anthropic do
          "delta" => %{"type" => "input_json_delta", "partial_json" => json},
          "index" => index
        }) do
-    {:data,
-     %Response{
-       tool_calls: [
-         %{index: index, function: %{arguments: json}}
-       ]
-     }}
+    {:data, %Response{tool_calls: [%{index: index, function: %{arguments: json}}]}}
   end
 
   defp process_sse_event(%{
@@ -447,33 +410,17 @@ defmodule Arcanum.Adapters.Anthropic do
          "content_block" => %{"type" => "tool_use", "id" => id, "name" => name},
          "index" => index
        }) do
-    {:data,
-     %Response{
-       tool_calls: [
-         %{index: index, id: id, function: %{name: name, arguments: ""}}
-       ]
-     }}
+    {:data, %Response{tool_calls: [%{index: index, id: id, function: %{name: name, arguments: ""}}]}}
   end
 
-  defp process_sse_event(%{"type" => "message_stop"}) do
-    :done
-  end
+  defp process_sse_event(%{"type" => "message_stop"}), do: :done
 
   defp process_sse_event(%{"type" => "message_delta"} = event) do
     usage = parse_usage(event["usage"])
-
-    {:data,
-     %Response{
-       usage: usage,
-       finish_reason: map_stop_reason(get_in(event, ["delta", "stop_reason"]))
-     }}
+    {:data, %Response{usage: usage, finish_reason: map_stop_reason(get_in(event, ["delta", "stop_reason"]))}}
   end
 
   defp process_sse_event(_event), do: {:data, %Response{}}
-
-  # -------------------------------------------------------------------
-  # HTTP helpers
-  # -------------------------------------------------------------------
 
   defp do_request(provider, body) do
     http_client().post(base_url(provider, "/v1/messages"),
@@ -516,8 +463,6 @@ defmodule Arcanum.Adapters.Anthropic do
     Application.get_env(:arcanum, :http_client, Req)
   end
 
-  # When `into: :self` is used and the response is non-200, the body is a
-  # Req.Response.Async struct. Drain it in-process and attempt JSON decode.
   defp drain_async_body(%Req.Response.Async{} = async) do
     raw =
       async
