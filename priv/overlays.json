@@ -39,14 +39,15 @@
       }
     },
     "openai": {
-      "gpt-4o": { "supports_vision": true },
-      "gpt-4o-mini": { "supports_vision": true },
-      "gpt-4.1": { "supports_vision": true },
-      "gpt-4.1-mini": { "supports_vision": true },
-      "gpt-4.1-nano": { "supports_vision": true },
-      "o1": { "supports_vision": true },
-      "o3": { "supports_vision": true },
-      "o4-mini": { "supports_vision": true },
+      "gpt-4o": { "supports_vision": true, "uses_max_completion_tokens": true },
+      "gpt-4o-mini": { "supports_vision": true, "uses_max_completion_tokens": true },
+      "gpt-4.1": { "supports_vision": true, "uses_max_completion_tokens": true },
+      "gpt-4.1-mini": { "supports_vision": true, "uses_max_completion_tokens": true },
+      "gpt-4.1-nano": { "supports_vision": true, "uses_max_completion_tokens": true },
+      "gpt-5.1": { "supports_vision": true, "uses_max_completion_tokens": true },
+      "o1": { "supports_vision": true, "uses_max_completion_tokens": true },
+      "o3": { "supports_vision": true, "uses_max_completion_tokens": true },
+      "o4-mini": { "supports_vision": true, "uses_max_completion_tokens": true },
       "gpt-image-1": {
         "supports_image_generation": true,
         "supported_sizes": ["1024x1024", "1024x1536", "1536x1024", "auto"],
@@ -83,10 +84,14 @@
       }
     },
     "github-copilot": {
-      "gpt-4o": { "supports_vision": true },
+      "gpt-4o": { "supports_vision": true, "uses_max_completion_tokens": true },
+      "gpt-4.1": { "supports_vision": true, "uses_max_completion_tokens": true },
+      "gpt-4.1-mini": { "supports_vision": true, "uses_max_completion_tokens": true },
+      "gpt-4.1-nano": { "supports_vision": true, "uses_max_completion_tokens": true },
+      "o3": { "supports_vision": true, "uses_max_completion_tokens": true },
+      "o4-mini": { "supports_vision": true, "uses_max_completion_tokens": true },
       "claude-sonnet-4": { "supports_vision": true },
-      "claude-opus-4.6": { "supports_vision": true },
-      "o4-mini": { "supports_vision": true }
+      "claude-opus-4.6": { "supports_vision": true }
     },
     "ollama": {
       "llava": { "supports_vision": true },

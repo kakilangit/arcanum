@@ -137,7 +137,7 @@ defmodule Arcanum.Adapters.OpenAI do
     body = %{model: intent.model, messages: messages}
     body = if tools, do: Map.put(body, :tools, tools), else: body
     body = if intent.temperature, do: Map.put(body, :temperature, intent.temperature), else: body
-    body = if intent.max_tokens, do: Map.put(body, :max_tokens, intent.max_tokens), else: body
+    body = apply_max_tokens(body, intent, profile)
     body = apply_thinking_param(body, profile)
 
     apply_provider_routing(body, profile)
@@ -161,6 +161,16 @@ defmodule Arcanum.Adapters.OpenAI do
 
   defp apply_provider_routing(body, %{provider_routing: routing}) when is_map(routing) do
     if Map.has_key?(body, :tools), do: Map.merge(body, routing), else: body
+  end
+
+  defp apply_max_tokens(body, %{max_tokens: nil}, _profile), do: body
+
+  defp apply_max_tokens(body, %{max_tokens: max}, %{uses_max_completion_tokens: true}) do
+    Map.put(body, :max_completion_tokens, max)
+  end
+
+  defp apply_max_tokens(body, %{max_tokens: max}, _profile) do
+    Map.put(body, :max_tokens, max)
   end
 
   defp apply_thinking_param(body, %{thinking_param: nil}), do: body
