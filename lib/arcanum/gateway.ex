@@ -63,7 +63,7 @@ defmodule Arcanum.Gateway do
     provider = resolve_auth(provider)
 
     if function_exported?(adapter, :embed, 3) do
-      adapter.embed(provider, model, input)
+      apply(adapter, :embed, [provider, model, input])
     else
       {:error, :not_supported}
     end
@@ -80,7 +80,7 @@ defmodule Arcanum.Gateway do
     provider = resolve_auth(provider)
 
     if function_exported?(adapter, :generate_image, 3) do
-      adapter.generate_image(provider, intent, profile)
+      apply(adapter, :generate_image, [provider, intent, profile])
     else
       {:error, :not_supported}
     end
@@ -97,7 +97,7 @@ defmodule Arcanum.Gateway do
     provider = resolve_auth(provider)
 
     if function_exported?(adapter, :generate_video, 3) do
-      adapter.generate_video(provider, intent, profile)
+      apply(adapter, :generate_video, [provider, intent, profile])
     else
       {:error, :not_supported}
     end
