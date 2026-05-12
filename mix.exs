@@ -1,7 +1,7 @@
 defmodule Arcanum.MixProject do
   use Mix.Project
 
-  @version "0.1.0-rc.1"
+  @version "0.1.0"
   @source_url "https://github.com/kakilangit/arcanum"
 
   def project do
@@ -46,7 +46,7 @@ defmodule Arcanum.MixProject do
       name: "arcanum",
       licenses: ["MIT"],
       links: %{"GitHub" => @source_url},
-      files: ~w(lib .formatter.exs mix.exs README.md LICENSE)
+      files: ~w(lib priv .formatter.exs mix.exs README.md CHANGELOG.md LICENSE)
     ]
   end
 

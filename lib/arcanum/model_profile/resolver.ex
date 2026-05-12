@@ -4,19 +4,58 @@ defmodule Arcanum.ModelProfile.Resolver do
 
   Resolution order:
   1. Registry (models.dev cache) — the single source of truth
-  2. Overlay merge — provider/model-specific fields that models.dev
-     doesn't carry (thinking_param, preserve_reasoning, provider_routing)
+  2. Overlay merge — provider/model-specific fields from `priv/overlays.json`
+     that models.dev doesn't carry (thinking_param, preserve_reasoning, provider_routing)
   3. Provider-level default — weakest fallback for local providers
-     not in models.dev (ollama, vllm)
+     not in models.dev (ollama, lmstudio, vllm)
   4. Global default — unknown everything
-
-  Adding support for a new model = adding it to models.dev.
   """
 
   alias Arcanum.ModelProfile
   alias Arcanum.ModelProfile.Registry
 
-  @max_overlays 100
+  @overlays_path Path.join(:code.priv_dir(:arcanum), "overlays.json")
+  @external_resource @overlays_path
+
+  @raw Jason.decode!(File.read!(@overlays_path))
+
+  @overlays @raw["overlays"]
+            |> Enum.take(100)
+            |> Enum.map(fn entry ->
+              key = {entry["provider"], entry["model"]}
+
+              value =
+                entry
+                |> Map.drop(["provider", "model"])
+                |> Enum.reduce(%{}, fn
+                  {"thinking_param", v}, acc -> Map.put(acc, :thinking_param, v)
+                  {"preserve_reasoning", v}, acc -> Map.put(acc, :preserve_reasoning, v)
+                  {"provider_routing", v}, acc -> Map.put(acc, :provider_routing, v)
+                  _other, acc -> acc
+                end)
+
+              {key, value}
+            end)
+            |> Map.new()
+
+  @provider_defaults @raw["provider_defaults"]
+                     |> Enum.take(50)
+                     |> Enum.map(fn {kind, attrs} ->
+                       profile = %ModelProfile{
+                         supports_system_role: Map.get(attrs, "supports_system_role", true),
+                         supports_tools: Map.get(attrs, "supports_tools", true),
+                         tool_call_format:
+                           case Map.get(attrs, "tool_call_format", "native") do
+                             "xml_text" -> :xml_text
+                             _ -> :native
+                           end,
+                         reasoning_field: nil,
+                         max_context: Map.get(attrs, "max_context")
+                       }
+
+                       {kind, profile}
+                     end)
+                     |> Map.new()
 
   # -------------------------------------------------------------------
   # Public API
@@ -40,38 +79,8 @@ defmodule Arcanum.ModelProfile.Resolver do
   # Overlay — fields models.dev doesn't carry
   # -------------------------------------------------------------------
 
-  # Overlays are sparse maps merged on top of a Registry profile.
-  # Only fields that models.dev cannot express belong here.
-  # Capped at @max_overlays entries.
-  defp overlays do
-    map = %{
-      # ZAI interleaved thinking models need explicit thinking param
-      {"zai", "glm-4.7"} => %{thinking_param: %{"type" => "enabled"}, preserve_reasoning: true},
-      {"zai", "glm-5"} => %{thinking_param: %{"type" => "enabled"}, preserve_reasoning: true},
-      {"zai", "glm-5.1"} => %{thinking_param: %{"type" => "enabled"}, preserve_reasoning: true},
-      {"zai", "glm-5v-turbo"} => %{
-        thinking_param: %{"type" => "enabled"},
-        preserve_reasoning: true
-      },
-      {"zhipuai", "glm-4.7"} => %{
-        thinking_param: %{"type" => "enabled"},
-        preserve_reasoning: true
-      },
-      {"zhipuai", "glm-5"} => %{
-        thinking_param: %{"type" => "enabled"},
-        preserve_reasoning: true
-      },
-      {"zhipuai", "glm-5.1"} => %{
-        thinking_param: %{"type" => "enabled"},
-        preserve_reasoning: true
-      }
-    }
-
-    Map.take(map, map |> Map.keys() |> Enum.take(@max_overlays))
-  end
-
   defp apply_overlay(profile, provider_kind, model) do
-    case Map.get(overlays(), {provider_kind, model}) do
+    case Map.get(@overlays, {provider_kind, model}) do
       nil -> profile
       overlay -> struct!(profile, overlay)
     end
@@ -81,27 +90,7 @@ defmodule Arcanum.ModelProfile.Resolver do
   # Provider-level defaults (local providers not in models.dev)
   # -------------------------------------------------------------------
 
-  defp provider_default("ollama"), do: local_profile()
-  defp provider_default("lmstudio"), do: local_profile()
-  defp provider_default("vllm"), do: vllm_profile()
-  defp provider_default(_unknown), do: ModelProfile.default()
-
-  defp local_profile do
-    %ModelProfile{
-      supports_system_role: true,
-      supports_tools: false,
-      tool_call_format: :xml_text,
-      reasoning_field: nil,
-      max_context: 32_768
-    }
-  end
-
-  defp vllm_profile do
-    %ModelProfile{
-      supports_system_role: true,
-      supports_tools: true,
-      tool_call_format: :native,
-      reasoning_field: nil
-    }
+  defp provider_default(kind) do
+    Map.get(@provider_defaults, kind, ModelProfile.default())
   end
 end
