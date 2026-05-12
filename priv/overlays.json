@@ -52,18 +52,27 @@
         "supports_image_generation": true,
         "supported_sizes": ["1024x1024", "1024x1536", "1536x1024", "auto"],
         "supported_formats": ["png", "webp", "jpeg"],
+        "supported_qualities": ["auto", "low", "medium", "high"],
+        "supports_style": false,
+        "image_response_mode": "native_b64",
         "max_outputs_per_request": 4
       },
       "dall-e-3": {
         "supports_image_generation": true,
         "supported_sizes": ["1024x1024", "1024x1792", "1792x1024"],
         "supported_formats": ["png"],
+        "supported_qualities": ["standard", "hd"],
+        "supports_style": true,
+        "image_response_mode": "request_b64",
         "max_outputs_per_request": 1
       },
       "dall-e-2": {
         "supports_image_generation": true,
         "supported_sizes": ["256x256", "512x512", "1024x1024"],
         "supported_formats": ["png"],
+        "supported_qualities": ["standard"],
+        "supports_style": false,
+        "image_response_mode": "request_b64",
         "max_outputs_per_request": 10
       }
     },
@@ -80,6 +89,9 @@
         "supports_image_generation": true,
         "supported_sizes": ["1024x1024"],
         "supported_formats": ["png"],
+        "supported_qualities": ["standard"],
+        "supports_style": false,
+        "image_response_mode": "request_b64",
         "max_outputs_per_request": 1
       }
     },

@@ -7,6 +7,7 @@ defmodule Arcanum.ModelProfile do
   """
 
   @type tool_call_format :: :native | :xml_text
+  @type image_response_mode :: :native_b64 | :request_b64
 
   @type t :: %__MODULE__{
           supports_system_role: boolean(),
@@ -24,6 +25,9 @@ defmodule Arcanum.ModelProfile do
           max_outputs_per_request: pos_integer(),
           supported_sizes: [String.t()],
           supported_formats: [String.t()],
+          supported_qualities: [String.t()],
+          supports_style: boolean(),
+          image_response_mode: image_response_mode(),
           provider_routing: map() | nil
         }
 
@@ -43,6 +47,9 @@ defmodule Arcanum.ModelProfile do
             max_outputs_per_request: 4,
             supported_sizes: [],
             supported_formats: [],
+            supported_qualities: [],
+            supports_style: false,
+            image_response_mode: :native_b64,
             provider_routing: nil
 
   @doc """

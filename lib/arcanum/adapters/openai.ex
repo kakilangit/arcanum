@@ -106,12 +106,12 @@ defmodule Arcanum.Adapters.OpenAI do
   end
 
   @impl true
-  def generate_image(provider, %MediaIntent{} = intent, %ModelProfile{}) do
+  def generate_image(provider, %MediaIntent{} = intent, %ModelProfile{} = profile) do
     body =
       %{model: intent.model, prompt: intent.prompt, n: intent.n, size: intent.size}
-      |> maybe_put(:quality, intent.quality)
-      |> maybe_put(:style, intent.style)
-      |> maybe_put(:output_format, intent.format)
+      |> put_image_quality(intent, profile)
+      |> put_image_style(intent, profile)
+      |> put_image_response_format(intent, profile)
 
     case http_client().post(base_url(provider, "/images/generations"),
            json: body,
@@ -583,6 +583,30 @@ defmodule Arcanum.Adapters.OpenAI do
 
   defp extract_model_ids(_provider, models) do
     Enum.map(models, & &1["id"])
+  end
+
+  # Profile-driven image generation params — no model name matching.
+
+  defp put_image_quality(body, %MediaIntent{quality: nil}, _profile), do: body
+
+  defp put_image_quality(body, %MediaIntent{quality: quality}, %ModelProfile{supported_qualities: supported}) do
+    if supported == [] or quality in supported do
+      Map.put(body, :quality, quality)
+    else
+      body
+    end
+  end
+
+  defp put_image_style(body, %MediaIntent{style: nil}, _profile), do: body
+  defp put_image_style(body, _intent, %ModelProfile{supports_style: false}), do: body
+  defp put_image_style(body, %MediaIntent{style: style}, _profile), do: Map.put(body, :style, style)
+
+  defp put_image_response_format(body, %MediaIntent{format: format}, %ModelProfile{image_response_mode: :native_b64}) do
+    maybe_put(body, :output_format, format)
+  end
+
+  defp put_image_response_format(body, _intent, %ModelProfile{image_response_mode: :request_b64}) do
+    Map.put(body, :response_format, "b64_json")
   end
 
   defp maybe_put(map, _key, nil), do: map

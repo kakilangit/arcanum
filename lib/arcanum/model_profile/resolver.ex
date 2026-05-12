@@ -37,6 +37,8 @@ defmodule Arcanum.ModelProfile.Resolver do
                         case {key, v} do
                           {:tool_call_format, "xml_text"} -> :xml_text
                           {:tool_call_format, "native"} -> :native
+                          {:image_response_mode, "native_b64"} -> :native_b64
+                          {:image_response_mode, "request_b64"} -> :request_b64
                           _ -> v
                         end
 
