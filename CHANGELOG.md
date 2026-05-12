@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Anthropic adapter**: Rewrite message formatting for correct Anthropic wire protocol
+  - System prompt extraction now handles both atom (`:system`) and string (`"system"`) roles
+  - Messages formatted with only `"user"` and `"assistant"` roles (Anthropic requirement)
+  - Tool results sent as `"user"` role with `tool_result` content blocks (not `role: "tool"`)
+  - Assistant tool calls sent as `tool_use` content blocks (not `tool_calls` key)
+  - Adjacent same-role messages merged automatically (alternating role requirement)
+  - Mid-conversation system messages injected as user messages with `[System]` prefix
+
+### Added
+
+- **Anthropic adapter**: Retry logic with bounded exponential backoff (429, 502, 503, 529)
+- **Anthropic adapter**: Streaming support for `thinking_delta`, `input_json_delta`, `content_block_start` events
+- **Anthropic adapter**: Async body draining for error responses (matches OpenAI adapter)
+- **Anthropic unit tests**: 14 tests covering system extraction, message formatting, tool definitions, response parsing, headers, URL construction
+
 ### Changed
 
 - **README**: Remove untested providers (OpenAI, Anthropic, xAI, Ollama, vLLM) from supported list — code retained, documentation narrowed to verified providers
