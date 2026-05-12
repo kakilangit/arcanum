@@ -10,23 +10,18 @@ Arcanum provides a unified interface for chat completion, streaming, embeddings,
 
 | Provider | API Format | Features |
 |----------|-----------|----------|
-| OpenAI | OpenAI | Chat, stream, tools, embeddings |
-| Anthropic | Anthropic | Chat, stream, tools |
 | DeepSeek | OpenAI | Chat, stream, tools |
 | GitHub Copilot | OpenAI | Chat, stream, tools (OAuth device flow) |
 | OpenRouter | OpenAI | Chat, stream, tools |
-| xAI (Grok) | OpenAI | Chat, stream, tools |
 | ZAI / Zhipu | OpenAI | Chat, stream, tools |
-| Ollama | Native | Chat, stream, tools, embeddings |
 | LM Studio | OpenAI | Chat, stream, tools (auto model loading) |
-| vLLM | OpenAI | Chat, stream, tools |
 
 ## Installation
 
 ```elixir
 def deps do
   [
-    {:arcanum, "~> 0.1.0-rc.1"}
+    {:arcanum, "~> 0.1.0"}
   ]
 end
 ```

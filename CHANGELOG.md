@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **README**: Remove untested providers (OpenAI, Anthropic, xAI, Ollama, vLLM) from supported list — code retained, documentation narrowed to verified providers
+- **README**: Update installation version to `~> 0.1.0`
+
 ## [0.1.0] - 2026-05-12
 
 ### Added
@@ -33,5 +38,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Async body drain**: Streaming errors drain the `Req.Response.Async` body at the adapter layer — callers never receive opaque structs
 - **Base URL handling**: Strips trailing `/v1` before appending API paths, correctly handles versioned paths (Z.AI `/v4`)
 
-[Unreleased]: https://github.com/kakilangit/arcanum/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/kakilangit/arcanum/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/kakilangit/arcanum/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/kakilangit/arcanum/releases/tag/v0.1.0
