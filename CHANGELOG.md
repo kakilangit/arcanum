@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-05-12
+
 ### Fixed
 
 - **Anthropic adapter**: Rewrite message formatting for correct Anthropic wire protocol
@@ -23,11 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Anthropic adapter**: Streaming support for `thinking_delta`, `input_json_delta`, `content_block_start` events
 - **Anthropic adapter**: Async body draining for error responses (matches OpenAI adapter)
 - **Anthropic unit tests**: 14 tests covering system extraction, message formatting, tool definitions, response parsing, headers, URL construction
-
-### Changed
-
-- **README**: Remove untested providers (OpenAI, Anthropic, xAI, Ollama, vLLM) from supported list — code retained, documentation narrowed to verified providers
-- **README**: Update installation version to `~> 0.1.0`
+- **README**: Anthropic added back to supported providers table
 
 ## [0.1.0] - 2026-05-12
 

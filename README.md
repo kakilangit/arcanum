@@ -10,6 +10,7 @@ Arcanum provides a unified interface for chat completion, streaming, embeddings,
 
 | Provider | API Format | Features |
 |----------|-----------|----------|
+| Anthropic | Anthropic | Chat, stream, tools |
 | DeepSeek | OpenAI | Chat, stream, tools |
 | GitHub Copilot | OpenAI | Chat, stream, tools (OAuth device flow) |
 | OpenRouter | OpenAI | Chat, stream, tools |
