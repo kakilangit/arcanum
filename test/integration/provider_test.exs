@@ -269,10 +269,6 @@ defmodule Arcanum.Integration.ProviderTest do
         {:error, {:api_error, 429, _}} ->
           # Rate limited
           :ok
-
-        {:error, {:api_error, 500, _}} ->
-          # Transient server error (e.g. xAI image gen intermittent failures)
-          :ok
       end
     end
   end
