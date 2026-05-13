@@ -589,7 +589,9 @@ defmodule Arcanum.Adapters.OpenAI do
 
   defp put_image_quality(body, %MediaIntent{quality: nil}, _profile), do: body
 
-  defp put_image_quality(body, %MediaIntent{quality: quality}, %ModelProfile{supported_qualities: supported}) do
+  defp put_image_quality(body, %MediaIntent{quality: quality}, %ModelProfile{
+         supported_qualities: supported
+       }) do
     if supported == [] or quality in supported do
       Map.put(body, :quality, quality)
     else
@@ -599,9 +601,13 @@ defmodule Arcanum.Adapters.OpenAI do
 
   defp put_image_style(body, %MediaIntent{style: nil}, _profile), do: body
   defp put_image_style(body, _intent, %ModelProfile{supports_style: false}), do: body
-  defp put_image_style(body, %MediaIntent{style: style}, _profile), do: Map.put(body, :style, style)
 
-  defp put_image_response_format(body, %MediaIntent{format: format}, %ModelProfile{image_response_mode: :native_b64}) do
+  defp put_image_style(body, %MediaIntent{style: style}, _profile),
+    do: Map.put(body, :style, style)
+
+  defp put_image_response_format(body, %MediaIntent{format: format}, %ModelProfile{
+         image_response_mode: :native_b64
+       }) do
     maybe_put(body, :output_format, format)
   end
 

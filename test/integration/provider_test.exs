@@ -103,7 +103,9 @@ defmodule Arcanum.Integration.ProviderTest do
     @tag timeout: 30_000
     test "tool call", %{provider: provider, model: model} do
       intent = %Intent{
-        messages: [%{role: :user, content: [%{type: :text, text: "What's the weather in Tokyo?"}]}],
+        messages: [
+          %{role: :user, content: [%{type: :text, text: "What's the weather in Tokyo?"}]}
+        ],
         model: model,
         tools: [@tool_weather],
         temperature: 0.0
@@ -124,7 +126,10 @@ defmodule Arcanum.Integration.ProviderTest do
       messages = [
         %{role: :user, content: [%{type: :text, text: "My name is Arcanum."}]},
         %{role: :assistant, content: [%{type: :text, text: "Nice to meet you, Arcanum!"}]},
-        %{role: :user, content: [%{type: :text, text: "What is my name? Reply with just the name."}]}
+        %{
+          role: :user,
+          content: [%{type: :text, text: "What is my name? Reply with just the name."}]
+        }
       ]
 
       intent = %Intent{messages: messages, model: model, temperature: 0.0}
@@ -291,7 +296,9 @@ defmodule Arcanum.Integration.ProviderTest do
     @tag timeout: 30_000
     test "tool call", %{provider: provider, model: model} do
       intent = %Intent{
-        messages: [%{role: :user, content: [%{type: :text, text: "What's the weather in Paris?"}]}],
+        messages: [
+          %{role: :user, content: [%{type: :text, text: "What's the weather in Paris?"}]}
+        ],
         model: model,
         tools: [@tool_weather],
         temperature: 0.0,

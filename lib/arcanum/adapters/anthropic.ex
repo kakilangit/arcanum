@@ -410,14 +410,20 @@ defmodule Arcanum.Adapters.Anthropic do
          "content_block" => %{"type" => "tool_use", "id" => id, "name" => name},
          "index" => index
        }) do
-    {:data, %Response{tool_calls: [%{index: index, id: id, function: %{name: name, arguments: ""}}]}}
+    {:data,
+     %Response{tool_calls: [%{index: index, id: id, function: %{name: name, arguments: ""}}]}}
   end
 
   defp process_sse_event(%{"type" => "message_stop"}), do: :done
 
   defp process_sse_event(%{"type" => "message_delta"} = event) do
     usage = parse_usage(event["usage"])
-    {:data, %Response{usage: usage, finish_reason: map_stop_reason(get_in(event, ["delta", "stop_reason"]))}}
+
+    {:data,
+     %Response{
+       usage: usage,
+       finish_reason: map_stop_reason(get_in(event, ["delta", "stop_reason"]))
+     }}
   end
 
   defp process_sse_event(_event), do: {:data, %Response{}}

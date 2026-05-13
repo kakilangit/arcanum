@@ -130,7 +130,11 @@ defmodule Arcanum.Adapters.AnthropicTest do
               %{id: "tc_1", function: %{name: "get_weather", arguments: ~s({"city":"Tokyo"})}}
             ]
           },
-          %{role: :tool, content: [%{type: :text, text: "Tokyo: 22°C, sunny"}], tool_call_id: "tc_1"},
+          %{
+            role: :tool,
+            content: [%{type: :text, text: "Tokyo: 22°C, sunny"}],
+            tool_call_id: "tc_1"
+          },
           %{role: :user, content: [%{type: :text, text: "Thanks!"}]}
         ],
         model: "claude-sonnet-4-20250514"

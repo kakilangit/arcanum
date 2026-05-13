@@ -150,7 +150,9 @@ defmodule Arcanum.ModelProfile.ResolverTest do
 
   describe "resolve/3 with user overrides" do
     test "user overrides take highest priority" do
-      profile = Resolver.resolve("openai", "gpt-4o", %{supports_vision: true, max_context: 64_000})
+      profile =
+        Resolver.resolve("openai", "gpt-4o", %{supports_vision: true, max_context: 64_000})
+
       assert profile.supports_vision == true
       assert profile.max_context == 64_000
       # Original fields preserved
