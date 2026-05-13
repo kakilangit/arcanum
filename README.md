@@ -10,13 +10,13 @@ Arcanum provides a unified interface for chat completion, streaming, embeddings,
 
 | Provider | API Format | Features |
 |----------|-----------|----------|
-| OpenAI | OpenAI | Chat, stream, tools, vision, image generation |
+| OpenAI | OpenAI | Chat, stream, tools, vision, image generation, embeddings |
 | Anthropic | Anthropic | Chat, stream, tools, vision |
 | Ollama | Ollama | Chat, stream, tools, vision, embeddings |
 | DeepSeek | OpenAI | Chat, stream, tools |
 | GitHub Copilot | OpenAI | Chat, stream, tools, vision (OAuth device flow) |
 | OpenRouter | OpenAI | Chat, stream, tools |
-| xAI (Grok) | OpenAI | Chat, stream, tools, image generation |
+| xAI (Grok) | OpenAI | Chat, stream, tools, vision, image generation |
 | ZAI / Zhipu | OpenAI | Chat, stream, tools |
 
 ## Installation
@@ -151,9 +151,9 @@ Supported by OpenAI and Ollama adapters. Returns `{:error, :not_supported}` for 
 ### Image Generation
 
 ```elixir
-alias Arcanum.MediaIntent
+alias Arcanum.{Gateway, Intent}
 
-media_intent = %MediaIntent{
+intent = %Intent{
   model: "gpt-image-1",
   prompt: "A cat wearing a wizard hat",
   size: "1024x1024",
@@ -162,18 +162,17 @@ media_intent = %MediaIntent{
   format: "png"
 }
 
-{:ok, %Arcanum.MediaResponse{items: items}} = Gateway.generate_image(provider, media_intent)
+{:ok, %Arcanum.Response{content: [%{type: :image} = image | _]}} =
+  Gateway.generate_image(provider, intent)
 
-# Each item: %{data: binary(), url: nil, revised_prompt: "...", content_type: "image/png"}
+# image fields:
+#   data: binary()          — decoded image bytes (from b64_json)
+#   url: String.t() | nil   — image URL (if provider returns one)
+#   revised_prompt: String.t() | nil
+#   content_type: "image/png"
 ```
 
-### Video Generation
-
-```elixir
-{:ok, %Arcanum.MediaResponse{items: items}} = Gateway.generate_video(provider, media_intent)
-```
-
-Both `generate_image/3` and `generate_video/3` return `{:error, :not_supported}` for adapters that don't override the default implementation.
+Image generation parameters (`size`, `quality`, `style`) are profile-driven — only sent when the model's overlay declares support via `supported_sizes`, `supported_qualities`, or `supports_style`.
 
 ### List Models
 
@@ -250,6 +249,9 @@ Every model gets a `ModelProfile` that declares its capabilities upfront. Profil
   max_outputs_per_request:   4,          # media generation: max outputs
   supported_sizes:           [],         # media generation: allowed dimensions
   supported_formats:         [],         # media generation: allowed formats
+  supported_qualities:       [],         # media generation: allowed quality levels
+  supports_style:            false,      # media generation: accepts style parameter
+  image_response_mode:       nil,        # :native_b64 | :request_b64
   provider_routing:          nil         # provider-specific routing metadata
 }
 ```
@@ -365,17 +367,23 @@ Gateway (single public entry point)
 | Module | Purpose |
 |--------|---------|
 | `Arcanum.Gateway` | Single entry point for all inference calls. |
-| `Arcanum.Intent` | Canonical request struct. Content is always `[content_block()]`. |
-| `Arcanum.Response` | Canonical response struct (content, thinking, tool_calls, usage). |
-| `Arcanum.MediaIntent` | Request struct for image/video generation. |
-| `Arcanum.MediaResponse` | Response struct for generated media (items with data/url). |
-| `Arcanum.ModelProfile` | Declares model capabilities (tools, vision, reasoning, context). |
+| `Arcanum.Intent` | Canonical request struct for chat, streaming, and media generation. Content is always `[content_block()]`. |
+| `Arcanum.Response` | Canonical response struct (content, thinking, tool_calls, usage). Also used for image generation results. |
+| `Arcanum.ModelProfile` | Declares model capabilities (tools, vision, reasoning, context, image gen params). |
 | `Arcanum.ModelProfile.Resolver` | Multi-layer profile resolution with override support. |
 | `Arcanum.ModelProfile.Registry` | ETS cache backed by models.dev, refreshed hourly. |
 | `Arcanum.Response.Normalizer` | Profile-driven post-processing (XML/JSON tool extraction, think tags). |
 | `Arcanum.Provider` | Behaviour + macro (`use Arcanum.Provider`) with defoverridable defaults. |
 | `Arcanum.Probe` | TCP availability check for local providers. |
 | `Arcanum.Auth.Copilot` | GitHub Copilot OAuth device code flow (RFC 8628). |
+
+### Shared Infrastructure
+
+| Module | Purpose |
+|--------|---------|
+| `Arcanum.HTTP` | Configurable HTTP client, URL construction, async body draining (10 MB limit). |
+| `Arcanum.Retry` | Generic retry wrapper with exponential backoff (2s base, 30s cap, 3 attempts). |
+| `Arcanum.SSE` | Callback-driven Server-Sent Events stream parsing with configurable done sentinel. |
 
 ### Adapters
 
@@ -392,19 +400,31 @@ All Gateway functions return `{:ok, result}` or `{:error, reason}`. Error shapes
 | Error | Meaning |
 |-------|---------|
 | `{:error, {:api_error, status, body}}` | HTTP error from the provider. |
+| `{:error, {:api_error, :max_retries_exceeded}}` | All retry attempts exhausted. |
 | `{:error, :context_overflow}` | Input exceeded the model's context window. |
 | `{:error, :not_supported}` | Adapter doesn't implement the requested callback. |
 | `{:error, :copilot_auth_required}` | Copilot provider needs OAuth authentication. |
 | `{:error, term()}` | Network or other transient errors. |
 
-Transient HTTP errors (429, 502, 503, 529) are retried automatically up to 3 times by the adapters.
+Transient HTTP errors (429, 502, 503, 529) are retried automatically up to 3 times with exponential backoff via `Arcanum.Retry`.
 
-## Design Principles
+## Development
 
-- **Profile-driven.** Model capabilities are declared upfront, never discovered via error codes.
-- **Everything has a limit.** Retries, timeouts, model counts, poll attempts — all bounded.
-- **Callers never touch adapters directly.** Gateway is the only public interface.
-- **Two-layer separation.** Adapters handle wire protocol faithfully. Normalizer handles model-specific post-processing.
+```sh
+make deps       # fetch dependencies
+make lint       # format + credo --strict + compile --warnings-as-errors
+make test       # unit tests
+make regression # full regression suite (unit + integration + examples)
+```
+
+The regression script supports flags:
+
+```sh
+./test/regression.sh --skip-cloud     # local providers only
+./test/regression.sh --skip-local     # cloud providers only
+./test/regression.sh --skip-vision    # skip vision tests
+./test/regression.sh --skip-image-gen # skip image generation tests
+```
 
 ## Contributing
 
