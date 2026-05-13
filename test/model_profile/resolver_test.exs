@@ -147,4 +147,47 @@ defmodule Arcanum.ModelProfile.ResolverTest do
       assert profile.supports_tools == false
     end
   end
+
+  describe "resolve/3 with user overrides" do
+    test "user overrides take highest priority" do
+      profile =
+        Resolver.resolve("openai", "gpt-4o", %{supports_vision: true, max_context: 64_000})
+
+      assert profile.supports_vision == true
+      assert profile.max_context == 64_000
+      # Original fields preserved
+      assert profile.supports_tools == true
+    end
+
+    test "nil overrides returns normal profile" do
+      profile = Resolver.resolve("openai", "gpt-4o", nil)
+      assert profile.max_context == 128_000
+    end
+
+    test "empty map overrides returns normal profile" do
+      profile = Resolver.resolve("openai", "gpt-4o", %{})
+      assert profile.max_context == 128_000
+    end
+
+    test "overrides invalid keys are ignored" do
+      profile = Resolver.resolve("openai", "gpt-4o", %{bogus_field: true})
+      assert %ModelProfile{} = profile
+    end
+
+    test "overrides applied on top of overlay" do
+      profile = Resolver.resolve("zai", "glm-4.7", %{supports_vision: true})
+      # Overlay still applied
+      assert profile.thinking_param == %{"type" => "enabled"}
+      assert profile.preserve_reasoning == true
+      # User override applied
+      assert profile.supports_vision == true
+    end
+
+    test "user override can override overlay values" do
+      profile = Resolver.resolve("zai", "glm-4.7", %{preserve_reasoning: false})
+      assert profile.preserve_reasoning == false
+      # Other overlay fields untouched
+      assert profile.thinking_param == %{"type" => "enabled"}
+    end
+  end
 end

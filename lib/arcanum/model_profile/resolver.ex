@@ -2,13 +2,12 @@ defmodule Arcanum.ModelProfile.Resolver do
   @moduledoc """
   Resolves a `ModelProfile` for a given provider and model.
 
-  Resolution order:
-  1. Registry (models.dev cache) — the single source of truth
-  2. Overlay merge — provider/model-specific fields from `priv/overlays.json`
-     that models.dev doesn't carry (thinking_param, preserve_reasoning, provider_routing)
-  3. Provider-level default — weakest fallback for local providers
-     not in models.dev (ollama, lmstudio, vllm)
-  4. Global default — unknown everything
+  Resolution order (highest to lowest priority):
+  1. User overrides — caller-provided map of profile fields
+  2. Overlay — provider/model-specific fields from `priv/overlays.json`
+  3. Registry — models.dev cache (single source of truth for base profiles)
+  4. Provider default — weakest fallback for local providers not in models.dev
+  5. Global default — unknown everything
   """
 
   alias Arcanum.ModelProfile
@@ -19,22 +18,38 @@ defmodule Arcanum.ModelProfile.Resolver do
 
   @raw Jason.decode!(File.read!(@overlays_path))
 
+  @valid_keys Map.keys(%ModelProfile{}) -- [:__struct__]
+
   @overlays @raw["overlays"]
             |> Enum.take(100)
-            |> Enum.map(fn entry ->
-              key = {entry["provider"], entry["model"]}
+            |> Enum.flat_map(fn {provider, models} ->
+              models
+              |> Enum.take(200)
+              |> Enum.map(fn {model, attrs} ->
+                value =
+                  attrs
+                  |> Enum.take(50)
+                  |> Enum.reduce(%{}, fn {k, v}, acc ->
+                    key = String.to_existing_atom(k)
 
-              value =
-                entry
-                |> Map.drop(["provider", "model"])
-                |> Enum.reduce(%{}, fn
-                  {"thinking_param", v}, acc -> Map.put(acc, :thinking_param, v)
-                  {"preserve_reasoning", v}, acc -> Map.put(acc, :preserve_reasoning, v)
-                  {"provider_routing", v}, acc -> Map.put(acc, :provider_routing, v)
-                  _other, acc -> acc
-                end)
+                    if key in @valid_keys do
+                      coerced =
+                        case {key, v} do
+                          {:tool_call_format, "xml_text"} -> :xml_text
+                          {:tool_call_format, "native"} -> :native
+                          {:image_response_mode, "native_b64"} -> :native_b64
+                          {:image_response_mode, "request_b64"} -> :request_b64
+                          _ -> v
+                        end
 
-              {key, value}
+                      Map.put(acc, key, coerced)
+                    else
+                      acc
+                    end
+                  end)
+
+                {{provider, model}, value}
+              end)
             end)
             |> Map.new()
 
@@ -57,27 +72,22 @@ defmodule Arcanum.ModelProfile.Resolver do
                      end)
                      |> Map.new()
 
-  # -------------------------------------------------------------------
-  # Public API
-  # -------------------------------------------------------------------
-
   @doc """
   Returns the profile for a provider kind + model combination.
-  """
-  @spec resolve(String.t(), String.t()) :: ModelProfile.t()
-  def resolve(provider_kind, model) when is_binary(provider_kind) and is_binary(model) do
-    case Registry.lookup(provider_kind, model) do
-      %ModelProfile{} = profile ->
-        apply_overlay(profile, provider_kind, model)
 
-      nil ->
-        provider_default(provider_kind)
-    end
+  Optional `overrides` map takes highest priority over all other sources.
+  """
+  @spec resolve(String.t(), String.t(), map() | nil) :: ModelProfile.t()
+  def resolve(provider_kind, model, overrides \\ nil)
+      when is_binary(provider_kind) and is_binary(model) do
+    base_profile(provider_kind, model)
+    |> apply_overlay(provider_kind, model)
+    |> apply_overrides(overrides)
   end
 
-  # -------------------------------------------------------------------
-  # Overlay — fields models.dev doesn't carry
-  # -------------------------------------------------------------------
+  defp base_profile(provider_kind, model) do
+    Registry.lookup(provider_kind, model) || provider_default(provider_kind)
+  end
 
   defp apply_overlay(profile, provider_kind, model) do
     case Map.get(@overlays, {provider_kind, model}) do
@@ -86,11 +96,21 @@ defmodule Arcanum.ModelProfile.Resolver do
     end
   end
 
-  # -------------------------------------------------------------------
-  # Provider-level defaults (local providers not in models.dev)
-  # -------------------------------------------------------------------
-
   defp provider_default(kind) do
     Map.get(@provider_defaults, kind, ModelProfile.default())
+  end
+
+  defp apply_overrides(profile, nil), do: profile
+  defp apply_overrides(profile, overrides) when overrides == %{}, do: profile
+
+  defp apply_overrides(profile, overrides) when is_map(overrides) do
+    valid_keys = Map.keys(%ModelProfile{})
+
+    attrs =
+      overrides
+      |> Enum.filter(fn {k, _v} -> k in valid_keys end)
+      |> Map.new()
+
+    struct!(profile, attrs)
   end
 end

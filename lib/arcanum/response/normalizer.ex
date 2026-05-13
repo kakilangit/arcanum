@@ -6,8 +6,10 @@ defmodule Arcanum.Response.Normalizer do
   This module applies model-specific normalization based on the profile:
 
   - Content fallback from thinking (reasoning models with empty content)
+  - Think tag stripping (DeepSeek, GLM embed reasoning in `<think>` tags)
   - Malformed tool-call filtering (models that emit incomplete tool calls)
   - XML text tool-call extraction (models that emit tool calls as text)
+  - JSON code-block tool-call extraction (last-resort fallback)
   - Streaming delta normalization
 
   All model-specific behavior lives here — not in the adapter.
@@ -26,6 +28,9 @@ defmodule Arcanum.Response.Normalizer do
 
   @doc """
   Normalizes a complete (non-streaming) response based on the model profile.
+
+  Applied in order: content fallback → think tag strip → malformed filter →
+  XML extraction → JSON extraction.
   """
   @spec normalize(Response.t(), ModelProfile.t()) :: Response.t()
   def normalize(%Response{} = response, %ModelProfile{} = profile) do
@@ -39,16 +44,13 @@ defmodule Arcanum.Response.Normalizer do
 
   @doc """
   Normalizes a streaming delta based on the model profile.
-  Only applies content fallback (tool calls are extracted from the final merged response).
+
+  Only applies content fallback — tool calls are extracted from the final merged response.
   """
   @spec normalize_delta(Response.t(), ModelProfile.t()) :: Response.t()
   def normalize_delta(%Response{} = delta, %ModelProfile{} = profile) do
     apply_content_fallback(delta, profile)
   end
-
-  # -------------------------------------------------------------------
-  # Content fallback: reasoning models put output in thinking, not content
-  # -------------------------------------------------------------------
 
   defp apply_content_fallback(response, %{reasoning_field: nil}), do: response
 
@@ -74,19 +76,11 @@ defmodule Arcanum.Response.Normalizer do
 
   defp apply_content_fallback(response, _profile), do: response
 
-  # -------------------------------------------------------------------
-  # Strip <think>...</think> tags from content
-  # Some models (DeepSeek, GLM) embed reasoning in <think> tags within
-  # the content field. We extract this to the thinking field and remove
-  # the tags from content.
-  # -------------------------------------------------------------------
-
   defp strip_think_tags(%{content: nil} = response), do: response
   defp strip_think_tags(%{content: ""} = response), do: response
 
   defp strip_think_tags(%{content: content} = response) do
     if String.contains?(content, "<think>") || String.contains?(content, "</think>") do
-      # Extract thinking from <think> tags if not already set
       extracted_thinking =
         @think_tag_regex
         |> Regex.scan(content)
@@ -96,7 +90,6 @@ defmodule Arcanum.Response.Normalizer do
           |> String.trim()
         end)
 
-      # Remove all think tags (complete and dangling) from content
       cleaned =
         content
         |> String.replace(@think_tag_regex, "")
@@ -116,13 +109,8 @@ defmodule Arcanum.Response.Normalizer do
     end
   end
 
-  defp non_blank(nil), do: nil
   defp non_blank(""), do: nil
   defp non_blank(s) when is_binary(s), do: s
-
-  # -------------------------------------------------------------------
-  # Malformed tool-call filtering
-  # -------------------------------------------------------------------
 
   defp filter_malformed_tool_calls(%{tool_calls: nil} = response), do: response
   defp filter_malformed_tool_calls(%{tool_calls: []} = response), do: response
@@ -159,14 +147,9 @@ defmodule Arcanum.Response.Normalizer do
     end)
   end
 
-  # -------------------------------------------------------------------
-  # XML text tool-call extraction
-  # -------------------------------------------------------------------
-
   defp apply_tool_call_extraction(response, %{tool_call_format: :native}), do: response
 
   defp apply_tool_call_extraction(response, %{tool_call_format: :xml_text}) do
-    # If native tool_calls are already present, use them
     case response.tool_calls do
       calls when is_list(calls) and calls != [] ->
         Logger.debug(
@@ -218,17 +201,6 @@ defmodule Arcanum.Response.Normalizer do
     }
   end
 
-  # -------------------------------------------------------------------
-  # JSON text tool-call extraction (last resort fallback)
-  #
-  # Some models emit tool calls as JSON in markdown code blocks:
-  #   ```json
-  #   {"tool": "bash", "params": {"command": "date"}}
-  #   ```
-  # This extracts them when no native or XML tool calls were found.
-  # Requires "tool" or "name" key + "params"/"arguments"/"parameters" key.
-  # -------------------------------------------------------------------
-
   defp apply_json_tool_call_extraction(%{tool_calls: calls} = response)
        when is_list(calls) and calls != [] do
     response
@@ -266,10 +238,6 @@ defmodule Arcanum.Response.Normalizer do
     end
   end
 
-  # Accepts multiple common JSON tool call formats:
-  # {"tool": "name", "params": {...}}
-  # {"name": "name", "arguments": {...}}
-  # {"function": "name", "parameters": {...}}
   defp maybe_build_tool_call(parsed) when is_map(parsed) do
     name = parsed["tool"] || parsed["name"] || parsed["function"]
     args = parsed["params"] || parsed["arguments"] || parsed["parameters"] || %{}

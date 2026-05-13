@@ -2,24 +2,29 @@ defmodule Arcanum.Gateway do
   @moduledoc """
   Single entry point for all inference calls.
 
-  Pipeline: auth (credential resolution) → adapter (wire protocol) → normalizer (post-processing).
+  Pipeline: auth → profile resolution → adapter → normalizer.
 
   Callers never touch adapters, profiles, or normalizers directly.
+
+  ## Options
+
+  All public functions accept an `opts` keyword list:
+  - `:adapter` — override the adapter module (testing)
+  - `:profile_overrides` — map of `ModelProfile` fields (highest priority)
   """
 
   alias Arcanum
   alias Arcanum.Auth
-  alias Arcanum.{Intent, ModelProfile.Resolver, Response}
+  alias Arcanum.{Intent, MediaIntent, MediaResponse, ModelProfile.Resolver, Response}
   alias Arcanum.Response.Normalizer
 
   @doc """
   Synchronous chat completion.
-  Accepts optional `adapter` override for testing.
   """
   @spec chat(map(), Intent.t(), keyword()) :: {:ok, Response.t()} | {:error, term()}
   def chat(provider, %Intent{} = intent, opts \\ []) do
     adapter = Keyword.get(opts, :adapter) || Arcanum.adapter_for(provider)
-    profile = Resolver.resolve(provider.kind, intent.model)
+    profile = resolve_profile(provider, intent.model, opts)
     provider = resolve_auth(provider)
 
     case adapter.chat(provider, intent, profile) do
@@ -30,22 +35,17 @@ defmodule Arcanum.Gateway do
 
   @doc """
   Streaming chat completion.
-
-  Returns a normalized stream. Each delta has content fallback applied.
-  The caller is responsible for merging deltas; the final merged response
-  should be passed through `Normalizer.normalize/2` for tool-call extraction.
   """
   @spec stream(map(), Intent.t(), keyword()) :: {:ok, Enumerable.t()} | {:error, term()}
   def stream(provider, %Intent{} = intent, opts \\ []) do
     adapter = Keyword.get(opts, :adapter) || Arcanum.adapter_for(provider)
+    profile = resolve_profile(provider, intent.model, opts)
     provider = resolve_auth(provider)
-    adapter.stream(provider, intent, Resolver.resolve(provider.kind, intent.model))
+    adapter.stream(provider, intent, profile)
   end
 
   @doc """
   Lists available models from the provider.
-
-  Each adapter handles its own endpoint format and filtering internally.
   """
   @spec list_models(map()) :: {:ok, [String.t()]} | {:error, term()}
   def list_models(provider) do
@@ -55,29 +55,44 @@ defmodule Arcanum.Gateway do
   end
 
   @doc """
-  Generates embeddings.
+  Generates embeddings for the given text input.
   """
   @spec embed(map(), String.t(), String.t()) :: {:ok, [float()]} | {:error, term()}
   def embed(provider, model, input) do
     adapter = Arcanum.adapter_for(provider)
     provider = resolve_auth(provider)
-    do_embed(adapter, provider, model, input)
+    adapter.embed(provider, model, input)
   end
 
-  defp do_embed(adapter, provider, model, input) do
-    if function_exported?(adapter, :embed, 3) do
-      adapter.embed(provider, model, input)
-    else
-      {:error, :embeddings_not_supported}
-    end
+  @doc """
+  Generates images via the provider's image generation API.
+  """
+  @spec generate_image(map(), MediaIntent.t(), keyword()) ::
+          {:ok, MediaResponse.t()} | {:error, term()}
+  def generate_image(provider, %MediaIntent{} = intent, opts \\ []) do
+    adapter = Keyword.get(opts, :adapter) || Arcanum.adapter_for(provider)
+    profile = resolve_profile(provider, intent.model, opts)
+    provider = resolve_auth(provider)
+    adapter.generate_image(provider, intent, profile)
   end
 
-  # -------------------------------------------------------------------
-  # Auth resolution
-  # -------------------------------------------------------------------
+  @doc """
+  Generates videos via the provider's video generation API.
+  """
+  @spec generate_video(map(), MediaIntent.t(), keyword()) ::
+          {:ok, MediaResponse.t()} | {:error, term()}
+  def generate_video(provider, %MediaIntent{} = intent, opts \\ []) do
+    adapter = Keyword.get(opts, :adapter) || Arcanum.adapter_for(provider)
+    profile = resolve_profile(provider, intent.model, opts)
+    provider = resolve_auth(provider)
+    adapter.generate_video(provider, intent, profile)
+  end
 
-  # Copilot: inject required headers. The api_key is the GitHub OAuth
-  # token obtained via device code flow — used directly as Bearer token.
+  defp resolve_profile(provider, model, opts) do
+    overrides = Keyword.get(opts, :profile_overrides)
+    Resolver.resolve(provider.kind, model, overrides)
+  end
+
   defp resolve_auth(%{kind: "github-copilot"} = provider) do
     extra = Auth.Copilot.copilot_headers(Map.get(provider, :api_key, ""))
     Map.put(provider, :extra_headers, extra)

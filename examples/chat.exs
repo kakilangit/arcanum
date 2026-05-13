@@ -2,7 +2,7 @@
 # Usage:
 #   PROVIDER_BASE_URL=http://localhost:11434 PROVIDER_MODEL=llama3.2 elixir examples/chat.exs
 #   PROVIDER_BASE_URL=https://api.deepseek.com PROVIDER_API_KEY=sk-... PROVIDER_MODEL=deepseek-chat elixir examples/chat.exs
-#   PROVIDER_BASE_URL=https://api.openai.com PROVIDER_API_KEY=sk-... PROVIDER_MODEL=gpt-4o elixir examples/chat.exs
+#   PROVIDER_BASE_URL=https://api.anthropic.com PROVIDER_API_KEY=sk-ant-... PROVIDER_MODEL=claude-sonnet-4-20250514 PROVIDER_FORMAT=anthropic elixir examples/chat.exs
 #
 # Environment variables:
 #   PROVIDER_BASE_URL  — required, e.g. https://api.deepseek.com

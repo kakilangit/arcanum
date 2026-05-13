@@ -1,63 +1,117 @@
 {
-  "overlays": [
-    {
-      "provider": "deepseek",
-      "model": "deepseek-v4-flash",
-      "preserve_reasoning": true
+  "overlays": {
+    "deepseek": {
+      "deepseek-v4-flash": { "preserve_reasoning": true },
+      "deepseek-r1": { "preserve_reasoning": true },
+      "deepseek-reasoner": { "preserve_reasoning": true }
     },
-    {
-      "provider": "deepseek",
-      "model": "deepseek-r1",
-      "preserve_reasoning": true
+    "zai": {
+      "glm-4.7": {
+        "thinking_param": { "type": "enabled" },
+        "preserve_reasoning": true
+      },
+      "glm-5": {
+        "thinking_param": { "type": "enabled" },
+        "preserve_reasoning": true
+      },
+      "glm-5.1": {
+        "thinking_param": { "type": "enabled" },
+        "preserve_reasoning": true
+      },
+      "glm-5v-turbo": {
+        "thinking_param": { "type": "enabled" },
+        "preserve_reasoning": true,
+        "supports_vision": true
+      }
     },
-    {
-      "provider": "deepseek",
-      "model": "deepseek-reasoner",
-      "preserve_reasoning": true
+    "zhipuai": {
+      "glm-4.7": {
+        "thinking_param": { "type": "enabled" },
+        "preserve_reasoning": true
+      },
+      "glm-5": {
+        "thinking_param": { "type": "enabled" },
+        "preserve_reasoning": true
+      },
+      "glm-5.1": {
+        "thinking_param": { "type": "enabled" },
+        "preserve_reasoning": true
+      }
     },
-    {
-      "provider": "zai",
-      "model": "glm-4.7",
-      "thinking_param": {"type": "enabled"},
-      "preserve_reasoning": true
+    "openai": {
+      "gpt-4o": { "supports_vision": true, "uses_max_completion_tokens": true },
+      "gpt-4o-mini": { "supports_vision": true, "uses_max_completion_tokens": true },
+      "gpt-4.1": { "supports_vision": true, "uses_max_completion_tokens": true },
+      "gpt-4.1-mini": { "supports_vision": true, "uses_max_completion_tokens": true },
+      "gpt-4.1-nano": { "supports_vision": true, "uses_max_completion_tokens": true },
+      "gpt-5.1": { "supports_vision": true, "uses_max_completion_tokens": true },
+      "o1": { "supports_vision": true, "uses_max_completion_tokens": true },
+      "o3": { "supports_vision": true, "uses_max_completion_tokens": true },
+      "o4-mini": { "supports_vision": true, "uses_max_completion_tokens": true },
+      "gpt-image-1": {
+        "supports_image_generation": true,
+        "supported_sizes": ["1024x1024", "1024x1536", "1536x1024", "auto"],
+        "supported_formats": ["png", "webp", "jpeg"],
+        "supported_qualities": ["auto", "low", "medium", "high"],
+        "supports_style": false,
+        "image_response_mode": "native_b64",
+        "max_outputs_per_request": 4
+      },
+      "dall-e-3": {
+        "supports_image_generation": true,
+        "supported_sizes": ["1024x1024", "1024x1792", "1792x1024"],
+        "supported_formats": ["png"],
+        "supported_qualities": ["standard", "hd"],
+        "supports_style": true,
+        "image_response_mode": "request_b64",
+        "max_outputs_per_request": 1
+      },
+      "dall-e-2": {
+        "supports_image_generation": true,
+        "supported_sizes": ["256x256", "512x512", "1024x1024"],
+        "supported_formats": ["png"],
+        "supported_qualities": ["standard"],
+        "supports_style": false,
+        "image_response_mode": "request_b64",
+        "max_outputs_per_request": 10
+      }
     },
-    {
-      "provider": "zai",
-      "model": "glm-5",
-      "thinking_param": {"type": "enabled"},
-      "preserve_reasoning": true
+    "anthropic": {
+      "claude-sonnet-4-20250514": { "supports_vision": true },
+      "claude-opus-4-20250514": { "supports_vision": true },
+      "claude-3.5-sonnet-20241022": { "supports_vision": true },
+      "claude-3-opus-20240229": { "supports_vision": true }
     },
-    {
-      "provider": "zai",
-      "model": "glm-5.1",
-      "thinking_param": {"type": "enabled"},
-      "preserve_reasoning": true
+    "xai": {
+      "grok-2-vision": { "supports_vision": true },
+      "grok-3": { "supports_vision": true },
+      "grok-2-image": {
+        "supports_image_generation": true,
+        "supported_sizes": ["1024x1024"],
+        "supported_formats": ["png"],
+        "supported_qualities": ["standard"],
+        "supports_style": false,
+        "image_response_mode": "request_b64",
+        "max_outputs_per_request": 1
+      }
     },
-    {
-      "provider": "zai",
-      "model": "glm-5v-turbo",
-      "thinking_param": {"type": "enabled"},
-      "preserve_reasoning": true
+    "github-copilot": {
+      "gpt-4o": { "supports_vision": true, "uses_max_completion_tokens": true },
+      "gpt-4.1": { "supports_vision": true, "uses_max_completion_tokens": true },
+      "gpt-4.1-mini": { "supports_vision": true, "uses_max_completion_tokens": true },
+      "gpt-4.1-nano": { "supports_vision": true, "uses_max_completion_tokens": true },
+      "o3": { "supports_vision": true, "uses_max_completion_tokens": true },
+      "o4-mini": { "supports_vision": true, "uses_max_completion_tokens": true },
+      "claude-sonnet-4": { "supports_vision": true },
+      "claude-opus-4.6": { "supports_vision": true }
     },
-    {
-      "provider": "zhipuai",
-      "model": "glm-4.7",
-      "thinking_param": {"type": "enabled"},
-      "preserve_reasoning": true
-    },
-    {
-      "provider": "zhipuai",
-      "model": "glm-5",
-      "thinking_param": {"type": "enabled"},
-      "preserve_reasoning": true
-    },
-    {
-      "provider": "zhipuai",
-      "model": "glm-5.1",
-      "thinking_param": {"type": "enabled"},
-      "preserve_reasoning": true
+    "ollama": {
+      "llava": { "supports_vision": true },
+      "bakllava": { "supports_vision": true },
+      "llava-phi3": { "supports_vision": true },
+      "moondream": { "supports_vision": true }
     }
-  ],
+  },
   "provider_defaults": {
     "ollama": {
       "supports_system_role": true,

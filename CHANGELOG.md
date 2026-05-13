@@ -7,6 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Provider behaviour**: `use Arcanum.Provider` macro replaces `@behaviour` + `@optional_callbacks`. Optional callbacks (`embed/3`, `generate_image/3`, `generate_video/3`) now have `defoverridable` default implementations returning `{:error, :not_supported}`. Adapters override only what they support.
+- **Gateway**: Direct adapter dispatch replaces `apply/3` + `function_exported?` runtime detection. No runtime capability checks — capabilities are declared statically at compile time.
+
+### Added
+
+- **Overlay system**: Profile-driven image generation params (`supported_qualities`, `supports_style`, `image_response_mode`) with overlays for gpt-image-1, dall-e-3, dall-e-2, grok-2-image
+- **Media generation**: `MediaIntent` / `MediaResponse` structs and `Gateway.generate_image/3` / `Gateway.generate_video/3` functions
+- **ModelProfile fields**: `uses_max_completion_tokens` flag for newer OpenAI models
+- **Ollama adapter**: Multimodal (vision) support
+- **Resolver**: Generic overlay resolution with nested provider→model map structure
+
+## [0.1.1] - 2026-05-12
+
+### Fixed
+
+- **Anthropic adapter**: Rewrite message formatting for correct Anthropic wire protocol
+  - System prompt extraction now handles both atom (`:system`) and string (`"system"`) roles
+  - Messages formatted with only `"user"` and `"assistant"` roles (Anthropic requirement)
+  - Tool results sent as `"user"` role with `tool_result` content blocks (not `role: "tool"`)
+  - Assistant tool calls sent as `tool_use` content blocks (not `tool_calls` key)
+  - Adjacent same-role messages merged automatically (alternating role requirement)
+  - Mid-conversation system messages injected as user messages with `[System]` prefix
+
+### Added
+
+- **Anthropic adapter**: Retry logic with bounded exponential backoff (429, 502, 503, 529)
+- **Anthropic adapter**: Streaming support for `thinking_delta`, `input_json_delta`, `content_block_start` events
+- **Anthropic adapter**: Async body draining for error responses (matches OpenAI adapter)
+- **Anthropic unit tests**: 14 tests covering system extraction, message formatting, tool definitions, response parsing, headers, URL construction
+- **README**: Anthropic added back to supported providers table
+- **README**: Comprehensive rewrite covering usage, configuration, profile resolution, and profile overrides
+
 ## [0.1.0] - 2026-05-12
 
 ### Added
@@ -33,5 +67,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Async body drain**: Streaming errors drain the `Req.Response.Async` body at the adapter layer — callers never receive opaque structs
 - **Base URL handling**: Strips trailing `/v1` before appending API paths, correctly handles versioned paths (Z.AI `/v4`)
 
-[Unreleased]: https://github.com/kakilangit/arcanum/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/kakilangit/arcanum/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/kakilangit/arcanum/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/kakilangit/arcanum/releases/tag/v0.1.0
