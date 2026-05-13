@@ -12,9 +12,11 @@ Arcanum provides a unified interface for chat completion, streaming, embeddings,
 |----------|-----------|----------|
 | OpenAI | OpenAI | Chat, stream, tools, vision, image generation |
 | Anthropic | Anthropic | Chat, stream, tools, vision |
+| Ollama | Ollama | Chat, stream, tools, vision, embeddings |
 | DeepSeek | OpenAI | Chat, stream, tools |
 | GitHub Copilot | OpenAI | Chat, stream, tools, vision (OAuth device flow) |
 | OpenRouter | OpenAI | Chat, stream, tools |
+| xAI (Grok) | OpenAI | Chat, stream, tools, image generation |
 | ZAI / Zhipu | OpenAI | Chat, stream, tools |
 
 ## Installation
@@ -22,7 +24,7 @@ Arcanum provides a unified interface for chat completion, streaming, embeddings,
 ```elixir
 def deps do
   [
-    {:arcanum, "~> 0.1.1"}
+    {:arcanum, "~> 0.1.2"}
   ]
 end
 ```
@@ -69,7 +71,8 @@ intent = %Intent{
   max_tokens: 1024
 }
 
-{:ok, %Arcanum.Response{content: content}} = Gateway.chat(provider, intent)
+{:ok, response} = Gateway.chat(provider, intent)
+text = Arcanum.Response.text(response)
 ```
 
 ### Streaming
@@ -78,7 +81,8 @@ intent = %Intent{
 {:ok, stream} = Gateway.stream(provider, intent)
 
 Enum.each(stream, fn
-  {:data, %Arcanum.Response{content: chunk}} -> IO.write(chunk || "")
+  {:data, %Arcanum.Response{} = response} ->
+    IO.write(Arcanum.Response.text(response) || "")
   :done -> IO.puts("\n--- done ---")
   {:error, reason} -> IO.puts("Error: #{inspect(reason)}")
 end)
@@ -240,6 +244,7 @@ Every model gets a `ModelProfile` that declares its capabilities upfront. Profil
   reasoning_field:           nil,        # atom — where the model puts thinking (e.g. :reasoning_content)
   thinking_param:            nil,        # map sent to provider to enable thinking (e.g. %{type: "enabled"})
   preserve_reasoning:        false,      # keep thinking content in response?
+  uses_max_completion_tokens: false,     # use max_completion_tokens instead of max_tokens?
   max_context:               131_072,    # maximum context window
   max_images_per_message:    4,          # vision: max images per message
   max_outputs_per_request:   4,          # media generation: max outputs

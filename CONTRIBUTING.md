@@ -15,12 +15,13 @@ Most new providers use the OpenAI-compatible API format and don't need a new ada
 
 ### 1. Determine the API Format
 
-Arcanum has two adapters:
+Arcanum has three adapters:
 
 | Adapter | Use When |
 |---------|----------|
 | `openai` | Provider implements the OpenAI chat completions API (`/v1/chat/completions`) |
 | `anthropic` | Provider implements the Anthropic messages API (`/v1/messages`) |
+| `ollama` | Provider implements the Ollama API (`/api/chat`) |
 
 If the provider uses the OpenAI-compatible format (most do), no adapter code is needed.
 
