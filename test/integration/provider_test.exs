@@ -176,7 +176,8 @@ defmodule Arcanum.Integration.ProviderTest do
           assert models != []
           assert Enum.all?(models, &is_binary/1)
 
-        {:error, _} ->
+        {:error, reason} ->
+          IO.puts("\n⚠ List models skipped: #{inspect(reason)}")
           :ok
       end
     end
