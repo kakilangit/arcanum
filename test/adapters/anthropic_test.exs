@@ -280,7 +280,7 @@ defmodule Arcanum.Adapters.AnthropicTest do
       {:ok, resp} =
         AnthropicAdapter.chat(@provider, intent, @profile)
 
-      assert resp.content == "Hello!"
+      assert resp.content == [%{type: :text, text: "Hello!"}]
       assert resp.usage.prompt_tokens == 10
       assert resp.usage.completion_tokens == 5
       assert resp.finish_reason == "stop"

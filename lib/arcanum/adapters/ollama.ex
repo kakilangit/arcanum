@@ -198,8 +198,17 @@ defmodule Arcanum.Adapters.Ollama do
   end
 
   defp parse_chat_response(body) do
+    raw_content = get_in(body, ["message", "content"])
+
+    content =
+      case raw_content do
+        nil -> nil
+        "" -> nil
+        s when is_binary(s) -> [%{type: :text, text: s}]
+      end
+
     %Response{
-      content: get_in(body, ["message", "content"]),
+      content: content,
       tool_calls: parse_tool_calls(get_in(body, ["message", "tool_calls"])),
       usage: parse_usage(body),
       finish_reason: body["done_reason"]

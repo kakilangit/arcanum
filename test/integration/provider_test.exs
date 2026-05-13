@@ -35,7 +35,7 @@ defmodule Arcanum.Integration.ProviderTest do
   # Tags: :integration (OpenAI-compat), :ollama, :anthropic
   # All excluded by default. Run with --include <tag>.
 
-  alias Arcanum.{Gateway, Intent, MediaIntent, MediaResponse, Response}
+  alias Arcanum.{Gateway, Intent, Response}
 
   @tool_weather %{
     type: "function",
@@ -188,13 +188,13 @@ defmodule Arcanum.Integration.ProviderTest do
       }
 
       assert {:ok, %Response{content: content}} = Gateway.chat(provider, intent)
-      assert is_binary(content)
-      assert String.length(content) > 0
+      assert [_ | _] = content
+      assert Response.text(%Response{content: content}) != nil
     end
 
     @tag timeout: 60_000
     test "image generation", %{provider: provider} do
-      intent = %MediaIntent{
+      intent = %Intent{
         model: "gpt-image-1",
         prompt: "A solid red square on a white background",
         size: "1024x1024",
@@ -203,12 +203,13 @@ defmodule Arcanum.Integration.ProviderTest do
       }
 
       case Gateway.generate_image(provider, intent) do
-        {:ok, %MediaResponse{items: items}} ->
-          assert [_ | _] = items
+        {:ok, %Response{content: blocks}} ->
+          assert [_ | _] = blocks
 
-          Enum.each(items, fn item ->
-            assert is_binary(item.data)
-            assert item.data != ""
+          Enum.each(blocks, fn block ->
+            assert block.type == :image
+            assert is_binary(block.data)
+            assert block.data != ""
           end)
 
         {:error, {:api_error, 403, _}} ->
@@ -249,8 +250,8 @@ defmodule Arcanum.Integration.ProviderTest do
       }
 
       assert {:ok, %Response{content: content}} = Gateway.chat(provider, intent)
-      assert is_binary(content)
-      assert String.length(content) > 0
+      assert [_ | _] = content
+      assert Response.text(%Response{content: content}) != nil
     end
 
     @tag timeout: 30_000
