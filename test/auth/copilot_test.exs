@@ -9,6 +9,7 @@ defmodule Arcanum.Auth.CopilotTest do
 
     on_exit(fn ->
       Application.delete_env(:arcanum, :copilot_client_id)
+      Application.delete_env(:arcanum, :http_client)
     end)
 
     :ok

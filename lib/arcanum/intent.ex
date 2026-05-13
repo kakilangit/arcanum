@@ -1,9 +1,27 @@
 defmodule Arcanum.Intent do
   @moduledoc """
-  Canonical request struct for inference calls.
+  Canonical request struct for all inference calls: chat, streaming,
+  embeddings, and media generation.
 
-  Normalizes the request format across all providers so that the
-  adapter layer handles provider-specific serialization.
+  ## Chat / Streaming
+
+      %Intent{
+        model: "gpt-4o",
+        messages: [
+          %{role: :user, content: [%{type: :text, text: "Hello"}]}
+        ]
+      }
+
+  ## Media Generation
+
+      %Intent{
+        model: "gpt-image-1",
+        prompt: "A cat wearing a wizard hat",
+        size: "1024x1024",
+        quality: "auto",
+        n: 1,
+        format: "png"
+      }
 
   Content is always a list of typed blocks — no raw strings.
 
@@ -20,6 +38,20 @@ defmodule Arcanum.Intent do
           %{type: :text, text: String.t()}
           | %{type: :image_url, url: String.t()}
           | %{type: :image_base64, media_type: String.t(), data: String.t()}
+          | %{
+              type: :image,
+              data: binary() | nil,
+              url: String.t() | nil,
+              content_type: String.t(),
+              revised_prompt: String.t() | nil
+            }
+          | %{
+              type: :video,
+              data: binary() | nil,
+              url: String.t() | nil,
+              content_type: String.t(),
+              revised_prompt: String.t() | nil
+            }
 
   @type message :: %{role: atom(), content: [content_block()]}
 
@@ -33,16 +65,37 @@ defmodule Arcanum.Intent do
         }
 
   @type t :: %__MODULE__{
-          messages: [message()],
           model: String.t(),
+          messages: [message()] | nil,
           tools: [tool()] | nil,
           temperature: float() | nil,
           max_tokens: pos_integer() | nil,
-          context_length: pos_integer() | nil
+          context_length: pos_integer() | nil,
+          prompt: String.t() | nil,
+          negative_prompt: String.t() | nil,
+          size: String.t(),
+          quality: String.t() | nil,
+          style: String.t() | nil,
+          n: pos_integer(),
+          format: String.t()
         }
 
-  @enforce_keys [:messages, :model]
-  defstruct [:messages, :model, :tools, :temperature, :max_tokens, :context_length]
+  @enforce_keys [:model]
+  defstruct [
+    :model,
+    :messages,
+    :tools,
+    :temperature,
+    :max_tokens,
+    :context_length,
+    :prompt,
+    :negative_prompt,
+    quality: "auto",
+    style: nil,
+    size: "1024x1024",
+    n: 1,
+    format: "png"
+  ]
 
   @doc """
   Wraps a plain string as a single text content block.

@@ -22,7 +22,7 @@ defmodule StreamExample do
     IO.puts("---\n")
 
     intent = %Intent{
-      messages: [%{role: :user, content: query}],
+      messages: [%{role: :user, content: Intent.text(query)}],
       model: model,
       temperature: 0.7
     }
@@ -31,8 +31,8 @@ defmodule StreamExample do
       {:ok, stream} ->
         stream
         |> Enum.each(fn
-          {:data, %Response{content: content}} when is_binary(content) and content != "" ->
-            IO.write(content)
+          {:data, %Response{content: [%{type: :text, text: text} | _]}} when text != "" ->
+            IO.write(text)
 
           {:data, %Response{thinking: thinking}} when is_binary(thinking) and thinking != "" ->
             IO.write(IO.ANSI.faint() <> thinking <> IO.ANSI.reset())

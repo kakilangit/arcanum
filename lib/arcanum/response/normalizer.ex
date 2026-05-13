@@ -13,11 +13,14 @@ defmodule Arcanum.Response.Normalizer do
   - Streaming delta normalization
 
   All model-specific behavior lives here — not in the adapter.
+
+  Content is always `[content_block()]` — text extraction/injection uses
+  `Intent.to_text/1` and `Intent.text/1`.
   """
 
   require Logger
 
-  alias Arcanum.{ModelProfile, Response}
+  alias Arcanum.{Intent, ModelProfile, Response}
 
   @xml_tool_call_regex ~r/<tool_call>\s*<function=([^>]+)>\s*(.*?)\s*<\/function>\s*<\/tool_call>/s
   @xml_param_regex ~r/<parameter=([^>]+)>\s*(.*?)\s*<\/parameter>/s
@@ -61,29 +64,31 @@ defmodule Arcanum.Response.Normalizer do
         "(reasoning_field=#{profile.reasoning_field}, content=nil, thinking=#{byte_size(thinking)}B)"
     )
 
-    %{response | content: thinking}
+    %{response | content: Intent.text(thinking)}
   end
 
-  defp apply_content_fallback(%{content: "", thinking: thinking} = response, profile)
+  defp apply_content_fallback(%{content: [], thinking: thinking} = response, profile)
        when is_binary(thinking) and thinking != "" do
     Logger.debug(
       "Normalizer: content fallback from thinking " <>
-        "(reasoning_field=#{profile.reasoning_field}, content=\"\", thinking=#{byte_size(thinking)}B)"
+        "(reasoning_field=#{profile.reasoning_field}, content=[], thinking=#{byte_size(thinking)}B)"
     )
 
-    %{response | content: thinking}
+    %{response | content: Intent.text(thinking)}
   end
 
   defp apply_content_fallback(response, _profile), do: response
 
   defp strip_think_tags(%{content: nil} = response), do: response
-  defp strip_think_tags(%{content: ""} = response), do: response
+  defp strip_think_tags(%{content: []} = response), do: response
 
-  defp strip_think_tags(%{content: content} = response) do
-    if String.contains?(content, "<think>") || String.contains?(content, "</think>") do
+  defp strip_think_tags(%{content: blocks} = response) when is_list(blocks) do
+    text = Intent.to_text(blocks)
+
+    if String.contains?(text, "<think>") || String.contains?(text, "</think>") do
       extracted_thinking =
         @think_tag_regex
-        |> Regex.scan(content)
+        |> Regex.scan(text)
         |> Enum.map_join("\n", fn [match] ->
           match
           |> String.replace(~r/<\/?think>/, "")
@@ -91,7 +96,7 @@ defmodule Arcanum.Response.Normalizer do
         end)
 
       cleaned =
-        content
+        text
         |> String.replace(@think_tag_regex, "")
         |> String.replace(@dangling_think_regex, "")
         |> String.trim()
@@ -103,14 +108,12 @@ defmodule Arcanum.Response.Normalizer do
           {existing, _} -> existing
         end
 
-      %{response | content: non_blank(cleaned), thinking: thinking}
+      new_content = if cleaned == "", do: nil, else: Intent.text(cleaned)
+      %{response | content: new_content, thinking: thinking}
     else
       response
     end
   end
-
-  defp non_blank(""), do: nil
-  defp non_blank(s) when is_binary(s), do: s
 
   defp filter_malformed_tool_calls(%{tool_calls: nil} = response), do: response
   defp filter_malformed_tool_calls(%{tool_calls: []} = response), do: response
@@ -159,7 +162,9 @@ defmodule Arcanum.Response.Normalizer do
         response
 
       _ ->
-        case parse_xml_tool_calls(response.content) do
+        text = Response.text(response)
+
+        case parse_xml_tool_calls(text) do
           nil ->
             Logger.debug("Normalizer: no XML tool calls found in content")
             response
@@ -207,10 +212,12 @@ defmodule Arcanum.Response.Normalizer do
   end
 
   defp apply_json_tool_call_extraction(%{content: nil} = response), do: response
-  defp apply_json_tool_call_extraction(%{content: ""} = response), do: response
+  defp apply_json_tool_call_extraction(%{content: []} = response), do: response
 
-  defp apply_json_tool_call_extraction(%{content: content} = response) do
-    case parse_json_tool_calls(content) do
+  defp apply_json_tool_call_extraction(%{content: _} = response) do
+    text = Response.text(response)
+
+    case parse_json_tool_calls(text) do
       nil ->
         response
 
@@ -220,6 +227,8 @@ defmodule Arcanum.Response.Normalizer do
         %{response | tool_calls: calls}
     end
   end
+
+  defp parse_json_tool_calls(nil), do: nil
 
   defp parse_json_tool_calls(content) do
     @json_tool_call_regex

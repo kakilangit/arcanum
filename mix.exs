@@ -1,7 +1,7 @@
 defmodule Arcanum.MixProject do
   use Mix.Project
 
-  @version "0.1.1"
+  @version "0.1.2"
   @source_url "https://github.com/kakilangit/arcanum"
 
   def project do
@@ -38,7 +38,7 @@ defmodule Arcanum.MixProject do
 
   defp description do
     "Provider-agnostic AI inference library for Elixir. " <>
-      "Adapters for OpenAI-compatible APIs (DeepSeek, Z.AI/Zhipu, OpenRouter, Ollama, vLLM)."
+      "Adapters for OpenAI-compatible APIs (DeepSeek, Z.AI/Zhipu, OpenRouter, Ollama)."
   end
 
   defp package do

@@ -6,7 +6,7 @@ defmodule Arcanum.ModelProfile.Registry do
   Falls back gracefully — if fetch fails, the Resolver uses provider defaults.
 
   All provider kinds use models.dev IDs directly. Local-only providers
-  (ollama, vllm) are not in models.dev and rely on Resolver defaults.
+  (ollama) are not in models.dev and rely on Resolver defaults.
   """
 
   use GenServer
@@ -20,7 +20,7 @@ defmodule Arcanum.ModelProfile.Registry do
   @max_models_per_provider 500
 
   # Every provider kind that exists in models.dev.
-  # Local-only providers (ollama, vllm) are excluded.
+  # Local-only providers (ollama) are excluded.
   @default_providers [
     "openai",
     "anthropic",
@@ -29,8 +29,7 @@ defmodule Arcanum.ModelProfile.Registry do
     "xai",
     "zai",
     "zhipuai",
-    "github-copilot",
-    "lmstudio"
+    "github-copilot"
   ]
 
   alias Arcanum.ModelProfile

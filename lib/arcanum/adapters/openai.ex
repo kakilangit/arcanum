@@ -15,7 +15,7 @@ defmodule Arcanum.Adapters.OpenAI do
 
   use Arcanum.Provider
 
-  alias Arcanum.{Intent, MediaIntent, MediaResponse, ModelProfile, Response}
+  alias Arcanum.{Intent, ModelProfile, Response}
 
   require Logger
 
@@ -106,7 +106,7 @@ defmodule Arcanum.Adapters.OpenAI do
   end
 
   @impl true
-  def generate_image(provider, %MediaIntent{} = intent, %ModelProfile{} = profile) do
+  def generate_image(provider, %Intent{} = intent, %ModelProfile{} = profile) do
     body =
       %{model: intent.model, prompt: intent.prompt, n: intent.n, size: intent.size}
       |> put_image_quality(intent, profile)
@@ -119,7 +119,7 @@ defmodule Arcanum.Adapters.OpenAI do
            receive_timeout: @receive_timeout
          ) do
       {:ok, %{status: 200, body: %{"data" => items}}} ->
-        {:ok, %MediaResponse{items: parse_image_items(items, intent.format)}}
+        {:ok, %Response{content: parse_image_blocks(items, intent.format)}}
 
       {:ok, %{status: status, body: body}} ->
         {:error, {:api_error, status, body}}
@@ -319,7 +319,7 @@ defmodule Arcanum.Adapters.OpenAI do
     message = choice["message"] || %{}
 
     %Response{
-      content: non_blank(message["content"]),
+      content: text_to_blocks(message["content"]),
       thinking: non_blank(message["reasoning_content"]),
       tool_calls: parse_tool_calls(message["tool_calls"]),
       usage: parse_usage(body["usage"]),
@@ -358,11 +358,12 @@ defmodule Arcanum.Adapters.OpenAI do
     end)
   end
 
-  defp parse_image_items(items, format) do
+  defp parse_image_blocks(items, format) do
     content_type = format_to_content_type(format)
 
     Enum.map(items, fn item ->
       %{
+        type: :image,
         data: decode_image_data(item),
         url: item["url"],
         revised_prompt: item["revised_prompt"],
@@ -468,7 +469,7 @@ defmodule Arcanum.Adapters.OpenAI do
     delta = choice["delta"] || %{}
 
     %Response{
-      content: delta["content"],
+      content: text_to_blocks(delta["content"]),
       thinking: delta["reasoning_content"],
       tool_calls: parse_tool_call_deltas(delta["tool_calls"]),
       usage: parse_usage(body["usage"]),
@@ -530,6 +531,10 @@ defmodule Arcanum.Adapters.OpenAI do
   defp non_blank(s) when is_binary(s) and s != "", do: String.trim(s)
   defp non_blank(_), do: nil
 
+  defp text_to_blocks(nil), do: nil
+  defp text_to_blocks(""), do: nil
+  defp text_to_blocks(s) when is_binary(s), do: [%{type: :text, text: s}]
+
   defp classify_api_error(status, body) when status in [400, 413] do
     error_message = extract_error_message(body)
 
@@ -587,9 +592,9 @@ defmodule Arcanum.Adapters.OpenAI do
 
   # Profile-driven image generation params — no model name matching.
 
-  defp put_image_quality(body, %MediaIntent{quality: nil}, _profile), do: body
+  defp put_image_quality(body, %Intent{quality: nil}, _profile), do: body
 
-  defp put_image_quality(body, %MediaIntent{quality: quality}, %ModelProfile{
+  defp put_image_quality(body, %Intent{quality: quality}, %ModelProfile{
          supported_qualities: supported
        }) do
     if supported == [] or quality in supported do
@@ -599,13 +604,13 @@ defmodule Arcanum.Adapters.OpenAI do
     end
   end
 
-  defp put_image_style(body, %MediaIntent{style: nil}, _profile), do: body
+  defp put_image_style(body, %Intent{style: nil}, _profile), do: body
   defp put_image_style(body, _intent, %ModelProfile{supports_style: false}), do: body
 
-  defp put_image_style(body, %MediaIntent{style: style}, _profile),
+  defp put_image_style(body, %Intent{style: style}, _profile),
     do: Map.put(body, :style, style)
 
-  defp put_image_response_format(body, %MediaIntent{format: format}, %ModelProfile{
+  defp put_image_response_format(body, %Intent{format: format}, %ModelProfile{
          image_response_mode: :native_b64
        }) do
     maybe_put(body, :output_format, format)

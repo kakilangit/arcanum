@@ -15,7 +15,7 @@ defmodule Arcanum.Gateway do
 
   alias Arcanum
   alias Arcanum.Auth
-  alias Arcanum.{Intent, MediaIntent, MediaResponse, ModelProfile.Resolver, Response}
+  alias Arcanum.{Intent, ModelProfile.Resolver, Response}
   alias Arcanum.Response.Normalizer
 
   @doc """
@@ -67,9 +67,9 @@ defmodule Arcanum.Gateway do
   @doc """
   Generates images via the provider's image generation API.
   """
-  @spec generate_image(map(), MediaIntent.t(), keyword()) ::
-          {:ok, MediaResponse.t()} | {:error, term()}
-  def generate_image(provider, %MediaIntent{} = intent, opts \\ []) do
+  @spec generate_image(map(), Intent.t(), keyword()) ::
+          {:ok, Response.t()} | {:error, term()}
+  def generate_image(provider, %Intent{} = intent, opts \\ []) do
     adapter = Keyword.get(opts, :adapter) || Arcanum.adapter_for(provider)
     profile = resolve_profile(provider, intent.model, opts)
     provider = resolve_auth(provider)
@@ -79,9 +79,9 @@ defmodule Arcanum.Gateway do
   @doc """
   Generates videos via the provider's video generation API.
   """
-  @spec generate_video(map(), MediaIntent.t(), keyword()) ::
-          {:ok, MediaResponse.t()} | {:error, term()}
-  def generate_video(provider, %MediaIntent{} = intent, opts \\ []) do
+  @spec generate_video(map(), Intent.t(), keyword()) ::
+          {:ok, Response.t()} | {:error, term()}
+  def generate_video(provider, %Intent{} = intent, opts \\ []) do
     adapter = Keyword.get(opts, :adapter) || Arcanum.adapter_for(provider)
     profile = resolve_profile(provider, intent.model, opts)
     provider = resolve_auth(provider)

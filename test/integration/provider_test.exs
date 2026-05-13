@@ -7,6 +7,9 @@ defmodule Arcanum.Integration.ProviderTest do
       # OpenAI-compatible (DeepSeek, Z.AI, OpenRouter, etc.)
       mix test --include integration
 
+      # OpenAI-compatible + vision + image generation (OpenAI only)
+      mix test --include integration --include vision --include image_generation
+
       # Ollama
       mix test --include ollama
 
@@ -32,10 +35,10 @@ defmodule Arcanum.Integration.ProviderTest do
 
   use ExUnit.Case
 
-  # Tags: :integration (OpenAI-compat), :ollama, :anthropic
+  # Tags: :integration (OpenAI-compat), :ollama, :anthropic, :vision, :image_generation
   # All excluded by default. Run with --include <tag>.
 
-  alias Arcanum.{Gateway, Intent, MediaIntent, MediaResponse, Response}
+  alias Arcanum.{Gateway, Intent, Response}
 
   @tool_weather %{
     type: "function",
@@ -53,25 +56,29 @@ defmodule Arcanum.Integration.ProviderTest do
     }
   }
 
+  defp openai_setup do
+    url = System.get_env("ARCANUM_TEST_OPENAI_URL")
+    key = System.get_env("ARCANUM_TEST_OPENAI_KEY")
+    model = System.get_env("ARCANUM_TEST_OPENAI_MODEL")
+
+    if is_nil(url) or is_nil(model) do
+      raise ExUnit.DocTest.Error,
+        message: "ARCANUM_TEST_OPENAI_URL and ARCANUM_TEST_OPENAI_MODEL required"
+    end
+
+    provider = %{base_url: url, api_key: key, kind: "openai", api_format: :openai}
+    {:ok, provider: provider, model: model}
+  end
+
   # -------------------------------------------------------------------
-  # OpenAI-compatible providers
+  # OpenAI-compatible providers (text-only: chat, streaming, tools)
   # -------------------------------------------------------------------
 
   describe "OpenAI-compatible provider" do
     @describetag :integration
 
     setup do
-      url = System.get_env("ARCANUM_TEST_OPENAI_URL")
-      key = System.get_env("ARCANUM_TEST_OPENAI_KEY")
-      model = System.get_env("ARCANUM_TEST_OPENAI_MODEL")
-
-      if is_nil(url) or is_nil(model) do
-        raise ExUnit.DocTest.Error,
-          message: "ARCANUM_TEST_OPENAI_URL and ARCANUM_TEST_OPENAI_MODEL required"
-      end
-
-      provider = %{base_url: url, api_key: key, kind: "openai", api_format: :openai}
-      {:ok, provider: provider, model: model}
+      openai_setup()
     end
 
     @tag timeout: 30_000
@@ -82,8 +89,8 @@ defmodule Arcanum.Integration.ProviderTest do
         temperature: 0.0
       }
 
-      assert {:ok, %Response{content: content}} = Gateway.chat(provider, intent)
-      assert content =~ "PONG"
+      assert {:ok, %Response{} = resp} = Gateway.chat(provider, intent)
+      assert Response.text(resp) =~ "PONG"
     end
 
     @tag timeout: 30_000
@@ -133,8 +140,8 @@ defmodule Arcanum.Integration.ProviderTest do
       ]
 
       intent = %Intent{messages: messages, model: model, temperature: 0.0}
-      assert {:ok, %Response{content: content}} = Gateway.chat(provider, intent)
-      assert content =~ "Arcanum"
+      assert {:ok, %Response{} = resp} = Gateway.chat(provider, intent)
+      assert Response.text(resp) =~ "Arcanum"
     end
 
     @tag timeout: 60_000
@@ -166,9 +173,21 @@ defmodule Arcanum.Integration.ProviderTest do
           :ok
       end
     end
+  end
+
+  # -------------------------------------------------------------------
+  # OpenAI-compatible: vision (multimodal providers only)
+  # -------------------------------------------------------------------
+
+  describe "OpenAI-compatible provider vision" do
+    @describetag :vision
+
+    setup do
+      openai_setup()
+    end
 
     @tag timeout: 30_000
-    test "vision with image URL", %{provider: provider, model: model} do
+    test "vision with image", %{provider: provider, model: model} do
       image_path = Path.join([__DIR__, "..", "assets", "color_test.png"])
       base64 = image_path |> File.read!() |> Base.encode64()
 
@@ -188,13 +207,25 @@ defmodule Arcanum.Integration.ProviderTest do
       }
 
       assert {:ok, %Response{content: content}} = Gateway.chat(provider, intent)
-      assert is_binary(content)
-      assert String.length(content) > 0
+      assert [_ | _] = content
+      assert Response.text(%Response{content: content}) != nil
+    end
+  end
+
+  # -------------------------------------------------------------------
+  # OpenAI-compatible: image generation (OpenAI only)
+  # -------------------------------------------------------------------
+
+  describe "OpenAI-compatible provider image generation" do
+    @describetag :image_generation
+
+    setup do
+      openai_setup()
     end
 
     @tag timeout: 60_000
     test "image generation", %{provider: provider} do
-      intent = %MediaIntent{
+      intent = %Intent{
         model: "gpt-image-1",
         prompt: "A solid red square on a white background",
         size: "1024x1024",
@@ -203,12 +234,13 @@ defmodule Arcanum.Integration.ProviderTest do
       }
 
       case Gateway.generate_image(provider, intent) do
-        {:ok, %MediaResponse{items: items}} ->
-          assert [_ | _] = items
+        {:ok, %Response{content: blocks}} ->
+          assert [_ | _] = blocks
 
-          Enum.each(items, fn item ->
-            assert is_binary(item.data)
-            assert item.data != ""
+          Enum.each(blocks, fn block ->
+            assert block.type == :image
+            assert is_binary(block.data)
+            assert block.data != ""
           end)
 
         {:error, {:api_error, 403, _}} ->
@@ -249,8 +281,8 @@ defmodule Arcanum.Integration.ProviderTest do
       }
 
       assert {:ok, %Response{content: content}} = Gateway.chat(provider, intent)
-      assert is_binary(content)
-      assert String.length(content) > 0
+      assert [_ | _] = content
+      assert Response.text(%Response{content: content}) != nil
     end
 
     @tag timeout: 30_000
@@ -288,8 +320,8 @@ defmodule Arcanum.Integration.ProviderTest do
         max_tokens: 100
       }
 
-      assert {:ok, %Response{content: content}} = Gateway.chat(provider, intent)
-      assert content =~ "PONG"
+      assert {:ok, %Response{} = resp} = Gateway.chat(provider, intent)
+      assert Response.text(resp) =~ "PONG"
     end
 
     @tag timeout: 30_000

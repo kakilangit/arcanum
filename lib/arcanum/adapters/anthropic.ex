@@ -234,7 +234,7 @@ defmodule Arcanum.Adapters.Anthropic do
 
   defp parse_chat_response(body) do
     %Response{
-      content: extract_text_content(body["content"]),
+      content: extract_text_blocks(body["content"]),
       thinking: extract_thinking_content(body["content"]),
       tool_calls: extract_tool_calls(body["content"]),
       usage: parse_usage(body["usage"]),
@@ -242,15 +242,17 @@ defmodule Arcanum.Adapters.Anthropic do
     }
   end
 
-  defp extract_text_content(nil), do: nil
+  defp extract_text_blocks(nil), do: nil
 
-  defp extract_text_content(blocks) do
-    blocks
-    |> Enum.filter(&(&1["type"] == "text"))
-    |> Enum.map_join("", & &1["text"])
-    |> case do
-      "" -> nil
-      text -> text
+  defp extract_text_blocks(blocks) do
+    text_blocks =
+      blocks
+      |> Enum.filter(&(&1["type"] == "text"))
+      |> Enum.map(fn b -> %{type: :text, text: b["text"]} end)
+
+    case text_blocks do
+      [] -> nil
+      blocks -> blocks
     end
   end
 
@@ -387,7 +389,7 @@ defmodule Arcanum.Adapters.Anthropic do
          "type" => "content_block_delta",
          "delta" => %{"type" => "text_delta", "text" => text}
        }) do
-    {:data, %Response{content: text}}
+    {:data, %Response{content: [%{type: :text, text: text}]}}
   end
 
   defp process_sse_event(%{

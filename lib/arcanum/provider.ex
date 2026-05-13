@@ -4,7 +4,7 @@ defmodule Arcanum.Provider do
 
   Each adapter (Ollama, OpenAI, Anthropic, etc.) implements this behaviour
   to provide a uniform interface for chat completion, model listing,
-  and media generation.
+  embeddings, and media generation.
 
   All provider/model-specific serialization decisions are driven by `ModelProfile`.
 
@@ -16,7 +16,7 @@ defmodule Arcanum.Provider do
   `{:error, :not_supported}` by default. Override only what the adapter supports.
   """
 
-  alias Arcanum.{Intent, MediaIntent, MediaResponse, ModelProfile, Response}
+  alias Arcanum.{Intent, ModelProfile, Response}
 
   @type stream_event :: {:data, Response.t()} | {:error, term()} | :done
 
@@ -50,20 +50,20 @@ defmodule Arcanum.Provider do
   """
   @callback generate_image(
               provider :: map(),
-              intent :: MediaIntent.t(),
+              intent :: Intent.t(),
               profile :: ModelProfile.t()
             ) ::
-              {:ok, MediaResponse.t()} | {:error, term()}
+              {:ok, Response.t()} | {:error, term()}
 
   @doc """
   Generates videos from a text prompt.
   """
   @callback generate_video(
               provider :: map(),
-              intent :: MediaIntent.t(),
+              intent :: Intent.t(),
               profile :: ModelProfile.t()
             ) ::
-              {:ok, MediaResponse.t()} | {:error, term()}
+              {:ok, Response.t()} | {:error, term()}
 
   defmacro __using__(_opts) do
     quote do

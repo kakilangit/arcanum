@@ -4,7 +4,7 @@ defmodule Arcanum.Probe do
 
   Uses a lightweight TCP connect to check if the provider's host is
   reachable, avoiding repeated API calls that can trigger model reloads
-  in local providers like LM Studio.
+  in local providers.
   """
 
   @probe_timeout 2_000

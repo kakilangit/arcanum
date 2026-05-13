@@ -178,7 +178,7 @@ defmodule Arcanum.Adapters.Ollama do
         "id" => tc.id || generate_tool_call_id(),
         "function" => %{
           "name" => tc.function.name,
-          "arguments" => encode_arguments(tc.function.arguments)
+          "arguments" => decode_arguments(tc.function.arguments)
         }
       }
     end)
@@ -198,8 +198,17 @@ defmodule Arcanum.Adapters.Ollama do
   end
 
   defp parse_chat_response(body) do
+    raw_content = get_in(body, ["message", "content"])
+
+    content =
+      case raw_content do
+        nil -> nil
+        "" -> nil
+        s when is_binary(s) -> [%{type: :text, text: s}]
+      end
+
     %Response{
-      content: get_in(body, ["message", "content"]),
+      content: content,
       tool_calls: parse_tool_calls(get_in(body, ["message", "tool_calls"])),
       usage: parse_usage(body),
       finish_reason: body["done_reason"]
@@ -296,6 +305,18 @@ defmodule Arcanum.Adapters.Ollama do
   defp encode_arguments(args) when is_map(args), do: Jason.encode!(args)
   defp encode_arguments(args) when is_binary(args), do: args
   defp encode_arguments(_), do: "{}"
+
+  # Ollama expects arguments as a map, not a JSON string
+  defp decode_arguments(args) when is_map(args), do: args
+
+  defp decode_arguments(args) when is_binary(args) do
+    case Jason.decode(args) do
+      {:ok, map} when is_map(map) -> map
+      _ -> %{}
+    end
+  end
+
+  defp decode_arguments(_), do: %{}
 
   defp generate_tool_call_id do
     "call_" <> Base.encode16(:crypto.strong_rand_bytes(8), case: :lower)
