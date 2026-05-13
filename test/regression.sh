@@ -23,11 +23,14 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 CYAN='\033[0;36m'
+DIM='\033[2m'
 BOLD='\033[1m'
 RESET='\033[0m'
 
 PASS=0
 SKIP=0
+TOTAL_ELAPSED=0
+PHASE_ELAPSED=0
 
 SKIP_CLOUD=false
 SKIP_LOCAL=false
@@ -45,8 +48,26 @@ done
 
 # --- Helpers ---
 
+fmt_duration() {
+  local secs=$1
+  if (( secs >= 60 )); then
+    printf "%dm%02ds" $((secs / 60)) $((secs % 60))
+  else
+    printf "%ds" "$secs"
+  fi
+}
+
 log()  { echo -e "${CYAN}[regression]${RESET} $*"; }
-pass() { echo -e "  ${GREEN}✓${RESET} $*"; PASS=$((PASS + 1)); }
+
+pass() {
+  local elapsed=$1
+  shift
+  TOTAL_ELAPSED=$((TOTAL_ELAPSED + elapsed))
+  PHASE_ELAPSED=$((PHASE_ELAPSED + elapsed))
+  echo -e "  ${GREEN}✓${RESET} $* ${DIM}($(fmt_duration "$elapsed"))${RESET}"
+  PASS=$((PASS + 1))
+}
+
 skip() { echo -e "  ${YELLOW}⊘${RESET} $*"; SKIP=$((SKIP + 1)); }
 
 die() {
@@ -57,11 +78,24 @@ die() {
   exit 1
 }
 
+start_phase() {
+  PHASE_ELAPSED=0
+  echo ""
+  log "${BOLD}$1${RESET}"
+}
+
+end_phase() {
+  if (( PHASE_ELAPSED > 0 )); then
+    echo -e "  ${DIM}── phase elapsed: $(fmt_duration $PHASE_ELAPSED)${RESET}"
+  fi
+}
+
 run_test() {
   local label="$1"
   shift
+  local start=$SECONDS
   if "$@" > /tmp/arcanum_regression_out 2>&1; then
-    pass "$label"
+    pass $((SECONDS - start)) "$label"
   else
     die "$label"
   fi
@@ -71,8 +105,9 @@ run_example() {
   local label="$1"
   local script="$2"
   shift 2
+  local start=$SECONDS
   if timeout 120 env "$@" elixir "$script" "Reply with exactly: PONG" > /tmp/arcanum_regression_out 2>&1; then
-    pass "$label"
+    pass $((SECONDS - start)) "$label"
   else
     die "$label"
   fi
@@ -206,17 +241,17 @@ cd "$ARCANUM_DIR"
 # Phase 1: Unit Tests
 # ===================================================================
 
-echo ""
-log "${BOLD}Phase 1: Unit Tests${RESET}"
+start_phase "Phase 1: Unit Tests"
 
 run_test "mix test (unit)" mix test
+
+end_phase
 
 # ===================================================================
 # Phase 2: Local Providers
 # ===================================================================
 
-echo ""
-log "${BOLD}Phase 2: Local Providers${RESET}"
+start_phase "Phase 2: Local Providers"
 
 if [[ "$SKIP_LOCAL" == "true" ]]; then
   skip "Local providers (skipped via --skip-local)"
@@ -228,12 +263,13 @@ else
   fi
 fi
 
+end_phase
+
 # ===================================================================
 # Phase 3: Cloud Providers
 # ===================================================================
 
-echo ""
-log "${BOLD}Phase 3: Cloud Providers${RESET}"
+start_phase "Phase 3: Cloud Providers"
 
 if [[ "$SKIP_CLOUD" == "true" ]]; then
   skip "All cloud providers (skipped)"
@@ -285,6 +321,8 @@ else
   fi
 fi
 
+end_phase
+
 # ===================================================================
 # Summary
 # ===================================================================
@@ -295,6 +333,7 @@ echo -e "${BOLD}Regression Summary${RESET}"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo -e "  ${GREEN}Passed:${RESET}  $PASS"
 echo -e "  ${YELLOW}Skipped:${RESET} $SKIP"
+echo -e "  ${CYAN}Elapsed:${RESET} $(fmt_duration $TOTAL_ELAPSED)"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo -e "${GREEN}ALL PASSED${RESET}"
 echo ""
