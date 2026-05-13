@@ -8,6 +8,7 @@ Arcanum uses a two-layer architecture:
 
 - **Adapters** handle the wire protocol (OpenAI-compatible or Anthropic format)
 - **Model profiles** declare capabilities upfront — no runtime detection
+- **Shared modules** (`Arcanum.HTTP`, `Arcanum.Retry`, `Arcanum.SSE`) provide common HTTP, retry, and SSE parsing logic — adapters delegate to these instead of duplicating
 
 Most new providers use the OpenAI-compatible API format and don't need a new adapter. You only need to register the provider and configure its models via overlays.
 
@@ -100,33 +101,24 @@ For local providers not in models.dev, add a fallback profile under `provider_de
 Add the provider to `test/regression.sh`. Each provider needs:
 
 1. **Hardcoded URL, model, and kind** at the top of the script (env vars are only for API keys)
-2. **Integration test block** that sets `ARCANUM_TEST_OPENAI_*` env vars and runs `mix test --include integration`
+2. **Integration test block** that sets `ARCANUM_TEST_PROVIDER_*` env vars and runs `mix test --include integration`
 3. **Example script run** using `examples/stream.exs`
 
 ```bash
-# At the top — provider config
-NEW_PROVIDER_BASE_URL="https://api.new-provider.com/v1"
-NEW_PROVIDER_MODEL="their-model"
+# In Phase 3 — use the reusable provider test runners
+skip_if_no_key "NewProvider" "NEW_PROVIDER_KEY" && \
+  run_openai_provider "NewProvider" "https://api.new-provider.com/v1" "$NEW_PROVIDER_KEY" "their-model"
 
-# In Phase 3 — test block
-if [[ -n "${NEW_PROVIDER_KEY:-}" ]]; then
-  log "NewProvider: $NEW_PROVIDER_BASE_URL — $NEW_PROVIDER_MODEL"
+# For vision-capable models (guarded by --skip-vision):
+if [[ "$SKIP_VISION" != "true" ]]; then
+  skip_if_no_key "NewProvider" "NEW_PROVIDER_KEY" && \
+    run_vision_test "NewProvider" "https://api.new-provider.com/v1" "$NEW_PROVIDER_KEY" "their-vision-model"
+fi
 
-  run_test "NewProvider integration ($NEW_PROVIDER_MODEL)" \
-    env ARCANUM_TEST_OPENAI_URL="$NEW_PROVIDER_BASE_URL" \
-        ARCANUM_TEST_OPENAI_KEY="$NEW_PROVIDER_KEY" \
-        ARCANUM_TEST_OPENAI_MODEL="$NEW_PROVIDER_MODEL" \
-    mix test --include integration
-
-  run_example "NewProvider example: stream ($NEW_PROVIDER_MODEL)" \
-    examples/stream.exs \
-    PROVIDER_BASE_URL="$NEW_PROVIDER_BASE_URL" \
-    PROVIDER_API_KEY="$NEW_PROVIDER_KEY" \
-    PROVIDER_MODEL="$NEW_PROVIDER_MODEL" \
-    PROVIDER_KIND=openai \
-    PROVIDER_FORMAT=openai
-else
-  skip "NewProvider (NEW_PROVIDER_KEY not set)"
+# For image generation models (guarded by --skip-image-gen):
+if [[ "$SKIP_IMAGE_GEN" != "true" ]]; then
+  skip_if_no_key "NewProvider" "NEW_PROVIDER_KEY" && \
+    run_image_generation_test "NewProvider" "https://api.new-provider.com/v1" "$NEW_PROVIDER_KEY" "their-image-model"
 fi
 ```
 
@@ -150,7 +142,13 @@ NEW_PROVIDER_KEY=sk-...
 When a provider releases new models:
 
 1. **Add overlays** in `priv/overlays.json` if the model has capabilities not covered by models.dev (vision, reasoning, image generation)
-2. **Verify** by running the regression suite: `./test/regression.sh`
+2. **Verify** by running the regression suite: `make regression` (or `./test/regression.sh`)
+
+Use `--skip-vision` and/or `--skip-image-gen` to skip those test categories:
+
+```bash
+./test/regression.sh --skip-vision --skip-image-gen
+```
 
 No code changes are needed for standard chat/stream/tool models — the Registry fetches capabilities from models.dev automatically.
 
@@ -159,10 +157,13 @@ No code changes are needed for standard chat/stream/tool models — the Registry
 Only needed when a provider uses a non-standard API format (not OpenAI or Anthropic compatible).
 
 1. Implement the `Arcanum.Provider` behaviour (`use Arcanum.Provider`)
-2. Add the adapter module under `lib/arcanum/adapters/`
-3. Register the format in `Arcanum.Gateway` routing
-4. Add integration tests with a dedicated ExUnit tag
-5. Add a describe block in `test/integration/provider_test.exs`
+2. Use `Arcanum.HTTP` for HTTP client access and URL construction
+3. Use `Arcanum.Retry` for retry logic (or implement custom retry via `Retry.with_retry/2`)
+4. Use `Arcanum.SSE` for SSE stream parsing if the provider uses SSE
+5. Add the adapter module under `lib/arcanum/adapters/`
+6. Register the format in `Arcanum.Gateway` routing
+7. Add integration tests with a dedicated ExUnit tag
+8. Add a describe block in `test/integration/provider_test.exs`
 
 ## Verification Checklist
 
@@ -170,6 +171,6 @@ Before submitting changes:
 
 - [ ] `make lint` passes (zero warnings, Credo strict)
 - [ ] `make test` passes (unit tests)
-- [ ] `./test/regression.sh` passes (integration + examples against live providers)
+- [ ] `make regression` passes (integration + examples against live providers)
 - [ ] New provider appears in the README Supported Providers table
 - [ ] Overlays are minimal — only override what models.dev doesn't provide

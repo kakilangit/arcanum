@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Extracted `Arcanum.HTTP`**: Shared HTTP client (`client/0`), URL construction (`base_url/2`, `base_url_strip_v1/2`), and async body draining (`drain_async_body/1`) — replaces 4 duplicated copies across adapters and Copilot auth.
+- **Extracted `Arcanum.Retry`**: Generic retry wrapper (`with_retry/2`) with configurable retriable statuses and exponential backoff (`backoff/1`) — replaces 3 duplicated retry implementations.
+- **Extracted `Arcanum.SSE`**: Callback-driven SSE stream parsing (`stream/2`) with configurable done sentinel — replaces duplicated SSE parsing in OpenAI and Anthropic adapters.
+- **Bounded async drain**: `drain_async_body/1` now enforces a 10 MB byte limit to prevent unbounded memory consumption.
+- **Regression script**: Added `--skip-vision` and `--skip-image-gen` flags to `test/regression.sh`.
+- **Makefile**: Added `make regression` target.
+
 ## [0.1.2] - 2026-05-13
 
 ### Changed
@@ -14,15 +23,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Unified content blocks**: `Intent.content` and `Response.content` are always `[content_block()]`. Bare string content is no longer accepted — callers must use `Intent.text/1` to wrap text. `Response.text/1` helper extracts text from content blocks.
 - **Provider behaviour**: `use Arcanum.Provider` macro replaces `@behaviour` + `@optional_callbacks`. Optional callbacks (`embed/3`, `generate_image/3`, `generate_video/3`) now have `defoverridable` default implementations returning `{:error, :not_supported}`. Adapters override only what they support.
 - **Gateway**: Direct adapter dispatch replaces `apply/3` + `function_exported?` runtime detection. No runtime capability checks — capabilities are declared statically at compile time.
+- **Image generation body**: `size` and `quality` are now profile-driven — only included in the request when the model's overlay declares `supported_sizes` or `supported_qualities`. Providers that don't support these params (e.g. xAI) no longer receive them.
+- **Image response parsing**: `parse_image_blocks` uses `mime_type` from the provider response when available, falling back to the request format. Supports providers (e.g. xAI) that return `mime_type` instead of relying on the request format.
+- **Test env vars**: Renamed `ARCANUM_TEST_OPENAI_*` to `ARCANUM_TEST_PROVIDER_*`. These describe a provider (URL, key, model, kind), not specifically OpenAI. `ARCANUM_TEST_PROVIDER_KIND` defaults to `"openai"` and drives overlay resolution.
 
 ### Added
 
-- **Overlay system**: Profile-driven image generation params (`supported_qualities`, `supports_style`, `image_response_mode`) with overlays for gpt-image-1, dall-e-3, dall-e-2, grok-2-image
+- **xAI (Grok) support**: Verified integration with `grok-3-mini` (chat/stream/tools), `grok-4-fast-non-reasoning` (vision), and `grok-imagine-image` (image generation). Overlays for `grok-4-fast-*`, `grok-4.3`, `grok-imagine-image`, `grok-imagine-image-pro`.
+- **Overlay system**: Profile-driven image generation params (`supported_qualities`, `supports_style`, `image_response_mode`) with overlays for gpt-image-1, dall-e-3, dall-e-2, grok-imagine-image
 - **Media generation**: `MediaIntent` / `MediaResponse` structs and `Gateway.generate_image/3` / `Gateway.generate_video/3` functions
 - **ModelProfile fields**: `uses_max_completion_tokens` flag for newer OpenAI models
 - **Ollama adapter**: Multimodal (vision) support
 - **Resolver**: Generic overlay resolution with nested provider→model map structure
-- **Regression test suite**: Data-driven `test/regression.sh` with reusable provider test runners (`run_openai_provider`, `run_anthropic_provider`, `run_ollama_provider`). Fail-fast. Providers/models hardcoded — env vars only for API keys.
+- **Regression test suite**: Data-driven `test/regression.sh` with reusable provider test runners (`run_openai_provider`, `run_anthropic_provider`, `run_ollama_provider`, `run_vision_test`, `run_image_generation_test`). Fail-fast. Providers/models hardcoded — env vars only for API keys. Separate vision and image generation regression runs per provider.
 - **CONTRIBUTING.md**: Provider and model integration guide with overlay reference, regression test template, and verification checklist
 
 ### Fixed
@@ -30,6 +43,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Streaming delta merge**: `merge_content_blocks/2` coalesces consecutive text blocks during streaming
 - **Ollama tool calls**: `decode_arguments/1` handles Ollama returning `arguments` as a map instead of a JSON string
 - **Copilot test isolation**: `on_exit` cleanup now resets both `:copilot_client_id` and `:http_client` application env to prevent stub leaks into integration tests
+- **Usage tracking assertion**: Relaxed `total_tokens == prompt + completion` to `>=` — reasoning models (e.g. xAI grok-3-mini) include `reasoning_tokens` in total but not in completion
 
 ### Removed
 

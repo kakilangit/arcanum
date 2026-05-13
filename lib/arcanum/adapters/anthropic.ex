@@ -13,54 +13,45 @@ defmodule Arcanum.Adapters.Anthropic do
 
   use Arcanum.Provider
 
-  alias Arcanum.{Intent, ModelProfile, Response}
+  alias Arcanum.{HTTP, Intent, ModelProfile, Response, Retry, SSE}
 
   @anthropic_version "2023-06-01"
   @receive_timeout :timer.minutes(5)
-  @max_retry_attempts 3
   @retriable_statuses [429, 502, 503, 529]
 
   @impl true
   def chat(provider, %Intent{} = intent, %ModelProfile{} = profile) do
     body = build_chat_body(intent, profile)
 
-    case do_request(provider, body) do
-      {:ok, %{status: 200, body: body}} ->
-        {:ok, parse_chat_response(body)}
-
-      {:ok, %{status: status, body: body}} when status in @retriable_statuses ->
-        retry_chat(provider, body, 1)
-
-      {:ok, %{status: status, body: body}} ->
-        {:error, {:api_error, status, body}}
-
-      {:error, reason} ->
-        {:error, reason}
-    end
+    Retry.with_retry(
+      [
+        retriable_statuses: @retriable_statuses,
+        on_success: fn %{body: resp_body} -> {:ok, parse_chat_response(resp_body)} end,
+        on_error: fn status, resp_body -> {:error, {:api_error, status, resp_body}} end
+      ],
+      fn -> do_request(provider, body) end
+    )
   end
 
   @impl true
   def stream(provider, %Intent{} = intent, %ModelProfile{} = profile) do
     body = Map.put(build_chat_body(intent, profile), :stream, true)
 
-    case do_stream_request(provider, body) do
-      {:ok, %{status: 200, body: stream}} ->
-        {:ok, parse_sse_stream(stream)}
-
-      {:ok, %{status: status, body: body}} when status in @retriable_statuses ->
-        retry_stream(provider, body, 1)
-
-      {:ok, %{status: status, body: body}} ->
-        {:error, {:api_error, status, body}}
-
-      {:error, reason} ->
-        {:error, reason}
-    end
+    Retry.with_retry(
+      [
+        retriable_statuses: @retriable_statuses,
+        on_success: fn %{body: stream} -> {:ok, parse_sse_stream(stream)} end,
+        on_error: fn status, resp_body -> {:error, {:api_error, status, resp_body}} end
+      ],
+      fn -> do_stream_request(provider, body) end
+    )
   end
 
   @impl true
   def list_models(provider) do
-    case http_client().get(base_url(provider, "/v1/models"), headers: headers(provider)) do
+    case HTTP.client().get(HTTP.base_url_strip_v1(provider, "/v1/models"),
+           headers: headers(provider)
+         ) do
       {:ok, %{status: 200, body: %{"data" => models}}} ->
         {:ok, Enum.map(models, & &1["id"])}
 
@@ -303,87 +294,9 @@ defmodule Arcanum.Adapters.Anthropic do
   defp map_stop_reason("max_tokens"), do: "length"
   defp map_stop_reason(other), do: other
 
-  defp retry_chat(_provider, _body, attempt) when attempt >= @max_retry_attempts do
-    {:error, {:api_error, :max_retries_exceeded}}
-  end
-
-  defp retry_chat(provider, original_body, attempt) do
-    backoff(attempt)
-
-    case do_request(provider, original_body) do
-      {:ok, %{status: 200, body: body}} ->
-        {:ok, parse_chat_response(body)}
-
-      {:ok, %{status: status}} when status in @retriable_statuses ->
-        retry_chat(provider, original_body, attempt + 1)
-
-      {:ok, %{status: status, body: body}} ->
-        {:error, {:api_error, status, body}}
-
-      {:error, reason} ->
-        {:error, reason}
-    end
-  end
-
-  defp retry_stream(_provider, _body, attempt) when attempt >= @max_retry_attempts do
-    {:error, {:api_error, :max_retries_exceeded}}
-  end
-
-  defp retry_stream(provider, body, attempt) do
-    backoff(attempt)
-
-    case do_stream_request(provider, body) do
-      {:ok, %{status: 200, body: stream}} ->
-        {:ok, parse_sse_stream(stream)}
-
-      {:ok, %{status: status}} when status in @retriable_statuses ->
-        retry_stream(provider, body, attempt + 1)
-
-      {:ok, %{status: status, body: resp_body}} ->
-        {:error, {:api_error, status, drain_async_body(resp_body)}}
-
-      {:error, reason} ->
-        {:error, reason}
-    end
-  end
-
-  defp backoff(attempt) do
-    delay = min(:timer.seconds(2) * Integer.pow(2, attempt - 1), :timer.seconds(30))
-    Process.sleep(delay)
-  end
-
   defp parse_sse_stream(stream) do
-    Stream.transform(stream, :cont, fn
-      chunk, :cont ->
-        events = parse_sse_chunk(chunk)
-
-        case Enum.find(events, &match?(:done, &1)) do
-          :done -> {events, :done}
-          nil -> {events, :cont}
-        end
-
-      _chunk, :done ->
-        {:halt, :done}
-    end)
+    SSE.stream(stream, parse_event: &process_sse_event/1)
   end
-
-  defp parse_sse_chunk(chunk) when is_binary(chunk) do
-    chunk
-    |> String.split("\n")
-    |> Enum.flat_map(&parse_sse_line/1)
-  end
-
-  defp parse_sse_chunk(%{data: data}), do: parse_sse_chunk(data)
-  defp parse_sse_chunk(_), do: []
-
-  defp parse_sse_line("data: " <> json) do
-    case Jason.decode(json) do
-      {:ok, event} -> [process_sse_event(event)]
-      {:error, _} -> []
-    end
-  end
-
-  defp parse_sse_line(_), do: []
 
   defp process_sse_event(%{
          "type" => "content_block_delta",
@@ -431,7 +344,7 @@ defmodule Arcanum.Adapters.Anthropic do
   defp process_sse_event(_event), do: {:data, %Response{}}
 
   defp do_request(provider, body) do
-    http_client().post(base_url(provider, "/v1/messages"),
+    HTTP.client().post(HTTP.base_url_strip_v1(provider, "/v1/messages"),
       json: body,
       headers: headers(provider),
       receive_timeout: @receive_timeout
@@ -439,7 +352,7 @@ defmodule Arcanum.Adapters.Anthropic do
   end
 
   defp do_stream_request(provider, body) do
-    http_client().post(base_url(provider, "/v1/messages"),
+    HTTP.client().post(HTTP.base_url_strip_v1(provider, "/v1/messages"),
       json: body,
       headers: headers(provider),
       into: :self,
@@ -459,31 +372,4 @@ defmodule Arcanum.Adapters.Anthropic do
       key -> [{"x-api-key", key} | base]
     end
   end
-
-  defp base_url(provider, path) do
-    provider.base_url
-    |> String.trim_trailing("/")
-    |> String.trim_trailing("/v1")
-    |> Kernel.<>(path)
-  end
-
-  defp http_client do
-    Application.get_env(:arcanum, :http_client, Req)
-  end
-
-  defp drain_async_body(%Req.Response.Async{} = async) do
-    raw =
-      async
-      |> Enum.to_list()
-      |> IO.iodata_to_binary()
-
-    case Jason.decode(raw) do
-      {:ok, decoded} -> decoded
-      _ -> raw
-    end
-  rescue
-    _ -> nil
-  end
-
-  defp drain_async_body(body), do: body
 end

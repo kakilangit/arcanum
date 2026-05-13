@@ -10,6 +10,8 @@
 #   ./test/regression.sh              # run everything
 #   ./test/regression.sh --skip-cloud # skip cloud providers (local only)
 #   ./test/regression.sh --skip-local # skip local providers (cloud only)
+#   ./test/regression.sh --skip-vision      # skip vision tests
+#   ./test/regression.sh --skip-image-gen   # skip image generation tests
 
 set -euo pipefail
 
@@ -29,11 +31,15 @@ SKIP=0
 
 SKIP_CLOUD=false
 SKIP_LOCAL=false
+SKIP_VISION=false
+SKIP_IMAGE_GEN=false
 
 for arg in "$@"; do
   case "$arg" in
     --skip-cloud) SKIP_CLOUD=true ;;
     --skip-local) SKIP_LOCAL=true ;;
+    --skip-vision) SKIP_VISION=true ;;
+    --skip-image-gen) SKIP_IMAGE_GEN=true ;;
   esac
 done
 
@@ -75,32 +81,26 @@ run_example() {
 # --- Provider test runners ---
 
 # Runs integration tests + stream example for an OpenAI-compatible provider.
-# Args: name base_url api_key model [extra_tags...]
+# Args: name base_url api_key model [kind]
 run_openai_provider() {
   local name="$1" base_url="$2" api_key="$3" model="$4"
-  shift 4
-  local extra_tags=()
-  [[ $# -gt 0 ]] && extra_tags=("$@")
+  local kind="${5:-openai}"
 
   log "$name: $base_url — $model"
 
-  local include_args=(--include integration)
-  for tag in "${extra_tags[@]+"${extra_tags[@]}"}"; do
-    include_args+=(--include "$tag")
-  done
-
   run_test "$name integration ($model)" \
-    env ARCANUM_TEST_OPENAI_URL="$base_url" \
-        ARCANUM_TEST_OPENAI_KEY="$api_key" \
-        ARCANUM_TEST_OPENAI_MODEL="$model" \
-    mix test "${include_args[@]}"
+    env ARCANUM_TEST_PROVIDER_URL="$base_url" \
+        ARCANUM_TEST_PROVIDER_KEY="$api_key" \
+        ARCANUM_TEST_PROVIDER_MODEL="$model" \
+        ARCANUM_TEST_PROVIDER_KIND="$kind" \
+    mix test --include integration
 
   run_example "$name example: stream ($model)" \
     examples/stream.exs \
     PROVIDER_BASE_URL="$base_url" \
     PROVIDER_API_KEY="$api_key" \
     PROVIDER_MODEL="$model" \
-    PROVIDER_KIND=openai \
+    PROVIDER_KIND="$kind" \
     PROVIDER_FORMAT=openai
 }
 
@@ -146,6 +146,34 @@ run_ollama_provider() {
       PROVIDER_KIND=ollama \
       PROVIDER_FORMAT=custom
   done
+}
+
+# Runs vision test for an OpenAI-compatible provider.
+# Args: name base_url api_key model [kind]
+run_vision_test() {
+  local name="$1" base_url="$2" api_key="$3" model="$4"
+  local kind="${5:-openai}"
+
+  run_test "$name vision ($model)" \
+    env ARCANUM_TEST_PROVIDER_URL="$base_url" \
+        ARCANUM_TEST_PROVIDER_KEY="$api_key" \
+        ARCANUM_TEST_PROVIDER_MODEL="$model" \
+        ARCANUM_TEST_PROVIDER_KIND="$kind" \
+    mix test --include vision
+}
+
+# Runs image generation test for an OpenAI-compatible provider.
+# Args: name base_url api_key image_model [kind]
+run_image_generation_test() {
+  local name="$1" base_url="$2" api_key="$3" image_model="$4"
+  local kind="${5:-openai}"
+
+  run_test "$name image generation ($image_model)" \
+    env ARCANUM_TEST_PROVIDER_URL="$base_url" \
+        ARCANUM_TEST_PROVIDER_KEY="$api_key" \
+        ARCANUM_TEST_PROVIDER_IMAGE_MODEL="$image_model" \
+        ARCANUM_TEST_PROVIDER_KIND="$kind" \
+    mix test --include image_generation
 }
 
 # Skips a provider when its API key is missing.
@@ -219,11 +247,42 @@ else
   skip_if_no_key "OpenRouter" "OPENROUTER_KEY" && \
     run_openai_provider "OpenRouter" "https://openrouter.ai/api/v1" "$OPENROUTER_KEY" "meta-llama/llama-3.2-3b-instruct"
 
+  skip_if_no_key "xAI" "XAI_KEY" && \
+    run_openai_provider "xAI" "https://api.x.ai/v1" "$XAI_KEY" "grok-3-mini" "xai"
+
+  if [[ "$SKIP_VISION" == "true" ]]; then
+    skip "xAI vision (skipped via --skip-vision)"
+  else
+    skip_if_no_key "xAI" "XAI_KEY" && \
+      run_vision_test "xAI" "https://api.x.ai/v1" "$XAI_KEY" "grok-4-fast-non-reasoning" "xai"
+  fi
+
+  if [[ "$SKIP_IMAGE_GEN" == "true" ]]; then
+    skip "xAI image generation (skipped via --skip-image-gen)"
+  else
+    skip_if_no_key "xAI" "XAI_KEY" && \
+      run_image_generation_test "xAI" "https://api.x.ai/v1" "$XAI_KEY" "grok-imagine-image" "xai"
+  fi
+
   skip_if_no_key "Anthropic" "ANTHROPIC_KEY" && \
     run_anthropic_provider "Anthropic" "https://api.anthropic.com" "$ANTHROPIC_KEY" "claude-sonnet-4-20250514"
 
   skip_if_no_key "OpenAI" "OPENAPI_KEY" && \
-    run_openai_provider "OpenAI" "https://api.openai.com/v1" "$OPENAPI_KEY" "gpt-4.1-nano" "vision" "image_generation"
+    run_openai_provider "OpenAI" "https://api.openai.com/v1" "$OPENAPI_KEY" "gpt-4.1-nano"
+
+  if [[ "$SKIP_VISION" == "true" ]]; then
+    skip "OpenAI vision (skipped via --skip-vision)"
+  else
+    skip_if_no_key "OpenAI" "OPENAPI_KEY" && \
+      run_vision_test "OpenAI" "https://api.openai.com/v1" "$OPENAPI_KEY" "gpt-4.1-nano"
+  fi
+
+  if [[ "$SKIP_IMAGE_GEN" == "true" ]]; then
+    skip "OpenAI image generation (skipped via --skip-image-gen)"
+  else
+    skip_if_no_key "OpenAI" "OPENAPI_KEY" && \
+      run_image_generation_test "OpenAI" "https://api.openai.com/v1" "$OPENAPI_KEY" "gpt-image-1"
+  fi
 fi
 
 # ===================================================================
