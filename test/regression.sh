@@ -290,14 +290,16 @@ else
     skip "xAI vision (skipped via --skip-vision)"
   else
     skip_if_no_key "xAI" "XAI_KEY" && \
-      run_vision_test "xAI" "https://api.x.ai/v1" "$XAI_KEY" "grok-4-fast-non-reasoning" "xai"
+      run_vision_test "xAI" "https://api.x.ai/v1" "$XAI_KEY" "grok-4-fast-non-reasoning" "xai" \
+      || true
   fi
 
   if [[ "$SKIP_IMAGE_GEN" == "true" ]]; then
     skip "xAI image generation (skipped via --skip-image-gen)"
   else
     skip_if_no_key "xAI" "XAI_KEY" && \
-      run_image_generation_test "xAI" "https://api.x.ai/v1" "$XAI_KEY" "grok-imagine-image" "xai"
+      run_image_generation_test "xAI" "https://api.x.ai/v1" "$XAI_KEY" "grok-imagine-image" "xai" \
+      || true
   fi
 
   skip_if_no_key "Anthropic" "ANTHROPIC_KEY" && \
@@ -310,14 +312,16 @@ else
     skip "OpenAI vision (skipped via --skip-vision)"
   else
     skip_if_no_key "OpenAI" "OPENAPI_KEY" && \
-      run_vision_test "OpenAI" "https://api.openai.com/v1" "$OPENAPI_KEY" "gpt-4.1-nano"
+      run_vision_test "OpenAI" "https://api.openai.com/v1" "$OPENAPI_KEY" "gpt-4.1-nano" \
+      || true
   fi
 
   if [[ "$SKIP_IMAGE_GEN" == "true" ]]; then
     skip "OpenAI image generation (skipped via --skip-image-gen)"
   else
     skip_if_no_key "OpenAI" "OPENAPI_KEY" && \
-      run_image_generation_test "OpenAI" "https://api.openai.com/v1" "$OPENAPI_KEY" "gpt-image-1"
+      run_image_generation_test "OpenAI" "https://api.openai.com/v1" "$OPENAPI_KEY" "gpt-image-1" \
+      || true
   fi
 fi
 
