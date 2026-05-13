@@ -38,7 +38,7 @@ defmodule Arcanum.MixProject do
 
   defp description do
     "Provider-agnostic AI inference library for Elixir. " <>
-      "Adapters for OpenAI-compatible APIs (DeepSeek, Z.AI/Zhipu, OpenRouter, Ollama, vLLM)."
+      "Adapters for OpenAI-compatible APIs (DeepSeek, Z.AI/Zhipu, OpenRouter, Ollama)."
   end
 
   defp package do

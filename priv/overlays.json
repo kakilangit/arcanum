@@ -118,17 +118,6 @@
       "supports_tools": false,
       "tool_call_format": "xml_text",
       "max_context": 32768
-    },
-    "lmstudio": {
-      "supports_system_role": true,
-      "supports_tools": false,
-      "tool_call_format": "xml_text",
-      "max_context": 32768
-    },
-    "vllm": {
-      "supports_system_role": true,
-      "supports_tools": true,
-      "tool_call_format": "native"
     }
   }
 }

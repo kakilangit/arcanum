@@ -128,12 +128,6 @@ defmodule Arcanum.ModelProfile.ResolverTest do
       assert profile.max_context == 32_768
     end
 
-    test "returns provider default for vllm" do
-      profile = Resolver.resolve("vllm", "some-model")
-      assert profile.supports_tools == true
-      assert profile.tool_call_format == :native
-    end
-
     test "returns global default for unknown provider" do
       profile = Resolver.resolve("unknown", "some-model")
       assert %ModelProfile{} = profile

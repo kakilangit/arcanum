@@ -178,7 +178,7 @@ defmodule Arcanum.Adapters.Ollama do
         "id" => tc.id || generate_tool_call_id(),
         "function" => %{
           "name" => tc.function.name,
-          "arguments" => encode_arguments(tc.function.arguments)
+          "arguments" => decode_arguments(tc.function.arguments)
         }
       }
     end)
@@ -305,6 +305,18 @@ defmodule Arcanum.Adapters.Ollama do
   defp encode_arguments(args) when is_map(args), do: Jason.encode!(args)
   defp encode_arguments(args) when is_binary(args), do: args
   defp encode_arguments(_), do: "{}"
+
+  # Ollama expects arguments as a map, not a JSON string
+  defp decode_arguments(args) when is_map(args), do: args
+
+  defp decode_arguments(args) when is_binary(args) do
+    case Jason.decode(args) do
+      {:ok, map} when is_map(map) -> map
+      _ -> %{}
+    end
+  end
+
+  defp decode_arguments(_), do: %{}
 
   defp generate_tool_call_id do
     "call_" <> Base.encode16(:crypto.strong_rand_bytes(8), case: :lower)

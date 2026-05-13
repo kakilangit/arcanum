@@ -16,7 +16,6 @@ Arcanum provides a unified interface for chat completion, streaming, embeddings,
 | GitHub Copilot | OpenAI | Chat, stream, tools, vision (OAuth device flow) |
 | OpenRouter | OpenAI | Chat, stream, tools |
 | ZAI / Zhipu | OpenAI | Chat, stream, tools |
-| LM Studio | OpenAI | Chat, stream, tools (auto model loading) |
 
 ## Installation
 
@@ -188,14 +187,6 @@ Arcanum.Probe.probe_provider(provider)
 
 Cloud providers always return `:online`. Local providers get a TCP connect check (2s timeout).
 
-### Ensure Model Loaded (LM Studio)
-
-```elixir
-:ok = Arcanum.EnsureModel.ensure_loaded(provider, "qwen2.5-coder", context_length: 32_768)
-```
-
-Pre-loads a model on LM Studio with the specified context length. No-op for all other providers.
-
 ### GitHub Copilot Authentication
 
 ```elixir
@@ -274,7 +265,7 @@ Profiles are resolved automatically by `Gateway` via `Arcanum.ModelProfile.Resol
 
 The `Arcanum.ModelProfile.Registry` GenServer fetches model capabilities from [models.dev](https://models.dev) and caches them in ETS. Refreshes hourly. Falls back gracefully if the fetch fails.
 
-Default providers fetched: `openai`, `anthropic`, `deepseek`, `openrouter`, `xai`, `zai`, `zhipuai`, `github-copilot`, `lmstudio`.
+Default providers fetched: `openai`, `anthropic`, `deepseek`, `openrouter`, `xai`, `zai`, `zhipuai`, `github-copilot`.
 
 ```elixir
 # Lookup a cached profile (returns nil if not found)
@@ -317,7 +308,7 @@ Overlays patch capabilities that models.dev doesn't track (vision, image generat
 
 #### Provider Defaults
 
-For local providers not in models.dev (Ollama, LM Studio, vLLM), provider defaults from `priv/overlays.json` are used as the base profile. These assume conservative capabilities.
+For local providers not in models.dev (Ollama), provider defaults from `priv/overlays.json` are used as the base profile. These assume conservative capabilities.
 
 #### Profile Overrides
 
@@ -379,7 +370,6 @@ Gateway (single public entry point)
 | `Arcanum.Response.Normalizer` | Profile-driven post-processing (XML/JSON tool extraction, think tags). |
 | `Arcanum.Provider` | Behaviour + macro (`use Arcanum.Provider`) with defoverridable defaults. |
 | `Arcanum.Probe` | TCP availability check for local providers. |
-| `Arcanum.EnsureModel` | Pre-loads models on LM Studio before inference. |
 | `Arcanum.Auth.Copilot` | GitHub Copilot OAuth device code flow (RFC 8628). |
 
 ### Adapters
@@ -410,6 +400,10 @@ Transient HTTP errors (429, 502, 503, 529) are retried automatically up to 3 tim
 - **Everything has a limit.** Retries, timeouts, model counts, poll attempts — all bounded.
 - **Callers never touch adapters directly.** Gateway is the only public interface.
 - **Two-layer separation.** Adapters handle wire protocol faithfully. Normalizer handles model-specific post-processing.
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for how to add new providers and models.
 
 ## License
 

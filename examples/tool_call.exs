@@ -56,7 +56,7 @@ defmodule ToolCallExample do
     IO.puts("Model: #{model}")
     IO.puts("Query: #{query}\n")
 
-    messages = [%{role: :user, content: query}]
+    messages = [%{role: :user, content: Intent.text(query)}]
     react_loop(provider, model, messages, 0)
   end
 
@@ -75,21 +75,21 @@ defmodule ToolCallExample do
         IO.puts("[step #{step + 1}] #{length(tool_calls)} tool call(s)")
 
         # Add assistant message with tool calls
-        assistant_msg = %{role: :assistant, content: resp.content || "", tool_calls: tool_calls}
+        assistant_msg = %{role: :assistant, content: resp.content || [], tool_calls: tool_calls}
 
         # Execute each tool and collect results
-        tool_results =
+          tool_results =
           Enum.map(tool_calls, fn call ->
             IO.puts("  -> #{call.function.name}(#{call.function.arguments})")
             result = execute_tool(call.function.name, call.function.arguments)
             IO.puts("  <- #{result}")
-            %{role: :tool, content: result, tool_call_id: call.id}
+            %{role: :tool, content: Intent.text(result), tool_call_id: call.id}
           end)
 
         react_loop(provider, model, messages ++ [assistant_msg] ++ tool_results, step + 1)
 
-      {:ok, %Response{content: content}} ->
-        IO.puts("\n[Final answer]\n#{content}")
+      {:ok, %Response{} = resp} ->
+        IO.puts("\n[Final answer]\n#{Response.text(resp)}")
 
       {:error, reason} ->
         IO.puts("\n[error] #{inspect(reason)}")

@@ -52,13 +52,14 @@ defmodule Chat do
         loop(provider, model, history, turn)
 
       user_msg ->
-        messages = history ++ [%{role: :user, content: user_msg}]
+        messages = history ++ [%{role: :user, content: Intent.text(user_msg)}]
         intent = %Intent{messages: messages, model: model}
 
         case Gateway.chat(provider, intent) do
-          {:ok, %Response{content: content, thinking: thinking, usage: usage}} ->
+          {:ok, %Response{thinking: thinking, usage: usage} = resp} ->
+            text = Response.text(resp)
             if thinking && thinking != "", do: IO.puts("\n[thinking] #{thinking}")
-            IO.puts("\nassistant> #{content || "(no content)"}")
+            IO.puts("\nassistant> #{text || "(no content)"}")
 
             if usage do
               IO.puts(
@@ -67,7 +68,7 @@ defmodule Chat do
             end
 
             IO.puts("")
-            updated = messages ++ [%{role: :assistant, content: content || ""}]
+            updated = messages ++ [%{role: :assistant, content: resp.content || []}]
             loop(provider, model, updated, turn + 1)
 
           {:error, reason} ->
