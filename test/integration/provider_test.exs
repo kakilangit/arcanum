@@ -264,7 +264,10 @@ defmodule Arcanum.Integration.ProviderTest do
           end)
 
         {:error, {:api_error, 403, body}} ->
-          IO.puts("\n⚠ Image generation skipped: account lacks access (HTTP 403): #{inspect(body)}")
+          IO.puts(
+            "\n⚠ Image generation skipped: account lacks access (HTTP 403): #{inspect(body)}"
+          )
+
           :ok
 
         {:error, {:api_error, 429, body}} ->
