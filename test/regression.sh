@@ -10,6 +10,8 @@
 #   ./test/regression.sh              # run everything
 #   ./test/regression.sh --skip-cloud # skip cloud providers (local only)
 #   ./test/regression.sh --skip-local # skip local providers (cloud only)
+#   ./test/regression.sh --skip-vision      # skip vision tests
+#   ./test/regression.sh --skip-image-gen   # skip image generation tests
 
 set -euo pipefail
 
@@ -21,26 +23,51 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 CYAN='\033[0;36m'
+DIM='\033[2m'
 BOLD='\033[1m'
 RESET='\033[0m'
 
 PASS=0
 SKIP=0
+TOTAL_ELAPSED=0
+PHASE_ELAPSED=0
 
 SKIP_CLOUD=false
 SKIP_LOCAL=false
+SKIP_VISION=false
+SKIP_IMAGE_GEN=false
 
 for arg in "$@"; do
   case "$arg" in
     --skip-cloud) SKIP_CLOUD=true ;;
     --skip-local) SKIP_LOCAL=true ;;
+    --skip-vision) SKIP_VISION=true ;;
+    --skip-image-gen) SKIP_IMAGE_GEN=true ;;
   esac
 done
 
 # --- Helpers ---
 
+fmt_duration() {
+  local secs=$1
+  if (( secs >= 60 )); then
+    printf "%dm%02ds" $((secs / 60)) $((secs % 60))
+  else
+    printf "%ds" "$secs"
+  fi
+}
+
 log()  { echo -e "${CYAN}[regression]${RESET} $*"; }
-pass() { echo -e "  ${GREEN}✓${RESET} $*"; PASS=$((PASS + 1)); }
+
+pass() {
+  local elapsed=$1
+  shift
+  TOTAL_ELAPSED=$((TOTAL_ELAPSED + elapsed))
+  PHASE_ELAPSED=$((PHASE_ELAPSED + elapsed))
+  echo -e "  ${GREEN}✓${RESET} $* ${DIM}($(fmt_duration "$elapsed"))${RESET}"
+  PASS=$((PASS + 1))
+}
+
 skip() { echo -e "  ${YELLOW}⊘${RESET} $*"; SKIP=$((SKIP + 1)); }
 
 die() {
@@ -51,11 +78,24 @@ die() {
   exit 1
 }
 
+start_phase() {
+  PHASE_ELAPSED=0
+  echo ""
+  log "${BOLD}$1${RESET}"
+}
+
+end_phase() {
+  if (( PHASE_ELAPSED > 0 )); then
+    echo -e "  ${DIM}── phase elapsed: $(fmt_duration $PHASE_ELAPSED)${RESET}"
+  fi
+}
+
 run_test() {
   local label="$1"
   shift
+  local start=$SECONDS
   if "$@" > /tmp/arcanum_regression_out 2>&1; then
-    pass "$label"
+    pass $((SECONDS - start)) "$label"
   else
     die "$label"
   fi
@@ -65,8 +105,9 @@ run_example() {
   local label="$1"
   local script="$2"
   shift 2
+  local start=$SECONDS
   if timeout 120 env "$@" elixir "$script" "Reply with exactly: PONG" > /tmp/arcanum_regression_out 2>&1; then
-    pass "$label"
+    pass $((SECONDS - start)) "$label"
   else
     die "$label"
   fi
@@ -75,32 +116,26 @@ run_example() {
 # --- Provider test runners ---
 
 # Runs integration tests + stream example for an OpenAI-compatible provider.
-# Args: name base_url api_key model [extra_tags...]
+# Args: name base_url api_key model [kind]
 run_openai_provider() {
   local name="$1" base_url="$2" api_key="$3" model="$4"
-  shift 4
-  local extra_tags=()
-  [[ $# -gt 0 ]] && extra_tags=("$@")
+  local kind="${5:-openai}"
 
   log "$name: $base_url — $model"
 
-  local include_args=(--include integration)
-  for tag in "${extra_tags[@]+"${extra_tags[@]}"}"; do
-    include_args+=(--include "$tag")
-  done
-
   run_test "$name integration ($model)" \
-    env ARCANUM_TEST_OPENAI_URL="$base_url" \
-        ARCANUM_TEST_OPENAI_KEY="$api_key" \
-        ARCANUM_TEST_OPENAI_MODEL="$model" \
-    mix test "${include_args[@]}"
+    env ARCANUM_TEST_PROVIDER_URL="$base_url" \
+        ARCANUM_TEST_PROVIDER_KEY="$api_key" \
+        ARCANUM_TEST_PROVIDER_MODEL="$model" \
+        ARCANUM_TEST_PROVIDER_KIND="$kind" \
+    mix test --include integration
 
   run_example "$name example: stream ($model)" \
     examples/stream.exs \
     PROVIDER_BASE_URL="$base_url" \
     PROVIDER_API_KEY="$api_key" \
     PROVIDER_MODEL="$model" \
-    PROVIDER_KIND=openai \
+    PROVIDER_KIND="$kind" \
     PROVIDER_FORMAT=openai
 }
 
@@ -148,6 +183,34 @@ run_ollama_provider() {
   done
 }
 
+# Runs vision test for an OpenAI-compatible provider.
+# Args: name base_url api_key model [kind]
+run_vision_test() {
+  local name="$1" base_url="$2" api_key="$3" model="$4"
+  local kind="${5:-openai}"
+
+  run_test "$name vision ($model)" \
+    env ARCANUM_TEST_PROVIDER_URL="$base_url" \
+        ARCANUM_TEST_PROVIDER_KEY="$api_key" \
+        ARCANUM_TEST_PROVIDER_MODEL="$model" \
+        ARCANUM_TEST_PROVIDER_KIND="$kind" \
+    mix test --include vision
+}
+
+# Runs image generation test for an OpenAI-compatible provider.
+# Args: name base_url api_key image_model [kind]
+run_image_generation_test() {
+  local name="$1" base_url="$2" api_key="$3" image_model="$4"
+  local kind="${5:-openai}"
+
+  run_test "$name image generation ($image_model)" \
+    env ARCANUM_TEST_PROVIDER_URL="$base_url" \
+        ARCANUM_TEST_PROVIDER_KEY="$api_key" \
+        ARCANUM_TEST_PROVIDER_IMAGE_MODEL="$image_model" \
+        ARCANUM_TEST_PROVIDER_KIND="$kind" \
+    mix test --include image_generation
+}
+
 # Skips a provider when its API key is missing.
 # Args: name key_name
 skip_if_no_key() {
@@ -178,17 +241,17 @@ cd "$ARCANUM_DIR"
 # Phase 1: Unit Tests
 # ===================================================================
 
-echo ""
-log "${BOLD}Phase 1: Unit Tests${RESET}"
+start_phase "Phase 1: Unit Tests"
 
 run_test "mix test (unit)" mix test
+
+end_phase
 
 # ===================================================================
 # Phase 2: Local Providers
 # ===================================================================
 
-echo ""
-log "${BOLD}Phase 2: Local Providers${RESET}"
+start_phase "Phase 2: Local Providers"
 
 if [[ "$SKIP_LOCAL" == "true" ]]; then
   skip "Local providers (skipped via --skip-local)"
@@ -200,12 +263,13 @@ else
   fi
 fi
 
+end_phase
+
 # ===================================================================
 # Phase 3: Cloud Providers
 # ===================================================================
 
-echo ""
-log "${BOLD}Phase 3: Cloud Providers${RESET}"
+start_phase "Phase 3: Cloud Providers"
 
 if [[ "$SKIP_CLOUD" == "true" ]]; then
   skip "All cloud providers (skipped)"
@@ -219,12 +283,49 @@ else
   skip_if_no_key "OpenRouter" "OPENROUTER_KEY" && \
     run_openai_provider "OpenRouter" "https://openrouter.ai/api/v1" "$OPENROUTER_KEY" "meta-llama/llama-3.2-3b-instruct"
 
+  skip_if_no_key "xAI" "XAI_KEY" && \
+    run_openai_provider "xAI" "https://api.x.ai/v1" "$XAI_KEY" "grok-3-mini" "xai"
+
+  if [[ "$SKIP_VISION" == "true" ]]; then
+    skip "xAI vision (skipped via --skip-vision)"
+  else
+    skip_if_no_key "xAI" "XAI_KEY" && \
+      run_vision_test "xAI" "https://api.x.ai/v1" "$XAI_KEY" "grok-4-fast-non-reasoning" "xai" \
+      || true
+  fi
+
+  if [[ "$SKIP_IMAGE_GEN" == "true" ]]; then
+    skip "xAI image generation (skipped via --skip-image-gen)"
+  else
+    skip_if_no_key "xAI" "XAI_KEY" && \
+      run_image_generation_test "xAI" "https://api.x.ai/v1" "$XAI_KEY" "grok-imagine-image" "xai" \
+      || true
+  fi
+
   skip_if_no_key "Anthropic" "ANTHROPIC_KEY" && \
     run_anthropic_provider "Anthropic" "https://api.anthropic.com" "$ANTHROPIC_KEY" "claude-sonnet-4-20250514"
 
   skip_if_no_key "OpenAI" "OPENAPI_KEY" && \
-    run_openai_provider "OpenAI" "https://api.openai.com/v1" "$OPENAPI_KEY" "gpt-4.1-nano" "vision" "image_generation"
+    run_openai_provider "OpenAI" "https://api.openai.com/v1" "$OPENAPI_KEY" "gpt-4.1-nano"
+
+  if [[ "$SKIP_VISION" == "true" ]]; then
+    skip "OpenAI vision (skipped via --skip-vision)"
+  else
+    skip_if_no_key "OpenAI" "OPENAPI_KEY" && \
+      run_vision_test "OpenAI" "https://api.openai.com/v1" "$OPENAPI_KEY" "gpt-4.1-nano" \
+      || true
+  fi
+
+  if [[ "$SKIP_IMAGE_GEN" == "true" ]]; then
+    skip "OpenAI image generation (skipped via --skip-image-gen)"
+  else
+    skip_if_no_key "OpenAI" "OPENAPI_KEY" && \
+      run_image_generation_test "OpenAI" "https://api.openai.com/v1" "$OPENAPI_KEY" "gpt-image-1" \
+      || true
+  fi
 fi
+
+end_phase
 
 # ===================================================================
 # Summary
@@ -236,6 +337,7 @@ echo -e "${BOLD}Regression Summary${RESET}"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo -e "  ${GREEN}Passed:${RESET}  $PASS"
 echo -e "  ${YELLOW}Skipped:${RESET} $SKIP"
+echo -e "  ${CYAN}Elapsed:${RESET} $(fmt_duration $TOTAL_ELAPSED)"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo -e "${GREEN}ALL PASSED${RESET}"
 echo ""

@@ -15,12 +15,10 @@ defmodule Arcanum.Adapters.OpenAI do
 
   use Arcanum.Provider
 
-  alias Arcanum.{Intent, ModelProfile, Response}
-
+  alias Arcanum.{HTTP, Intent, ModelProfile, Response, Retry, SSE}
   require Logger
 
   @receive_timeout :timer.minutes(5)
-  @max_retry_attempts 3
   @retriable_statuses [429, 502, 503, 529]
 
   @context_overflow_patterns [
@@ -37,43 +35,35 @@ defmodule Arcanum.Adapters.OpenAI do
   def chat(provider, %Intent{} = intent, %ModelProfile{} = profile) do
     body = build_chat_body(intent, provider, profile)
 
-    case do_request(provider, body) do
-      {:ok, %{status: 200, body: body}} ->
-        {:ok, parse_chat_response(body)}
-
-      {:ok, %{status: status, body: body}} when status in @retriable_statuses ->
-        retry_chat(provider, body, 1)
-
-      {:ok, %{status: status, body: body}} ->
-        classify_api_error(status, body)
-
-      {:error, reason} ->
-        {:error, reason}
-    end
+    Retry.with_retry(
+      [
+        retriable_statuses: @retriable_statuses,
+        on_success: fn %{body: resp_body} -> {:ok, parse_chat_response(resp_body)} end,
+        on_error: fn status, resp_body -> classify_api_error(status, resp_body) end
+      ],
+      fn -> do_request(provider, body) end
+    )
   end
 
   @impl true
   def stream(provider, %Intent{} = intent, %ModelProfile{} = profile) do
     body = build_chat_body(intent, provider, profile) |> Map.put(:stream, true)
 
-    case do_stream_request(provider, body) do
-      {:ok, %{status: 200, body: stream}} ->
-        {:ok, parse_sse_stream(stream)}
-
-      {:ok, %{status: status}} when status in @retriable_statuses ->
-        retry_stream(provider, body, 1)
-
-      {:ok, %{status: status, body: resp_body}} ->
-        classify_api_error(status, drain_async_body(resp_body))
-
-      {:error, reason} ->
-        {:error, reason}
-    end
+    Retry.with_retry(
+      [
+        retriable_statuses: @retriable_statuses,
+        on_success: fn %{body: stream} -> {:ok, parse_sse_stream(stream)} end,
+        on_error: fn status, resp_body ->
+          classify_api_error(status, HTTP.drain_async_body(resp_body))
+        end
+      ],
+      fn -> do_stream_request(provider, body) end
+    )
   end
 
   @impl true
   def list_models(provider) do
-    case http_client().get(base_url(provider, "/models"), headers: headers(provider)) do
+    case HTTP.client().get(HTTP.base_url(provider, "/models"), headers: headers(provider)) do
       {:ok, %{status: 200, body: %{"data" => models}}} ->
         {:ok, extract_model_ids(provider, models)}
 
@@ -89,7 +79,7 @@ defmodule Arcanum.Adapters.OpenAI do
   def embed(provider, model, input) do
     body = %{model: model, input: input}
 
-    case http_client().post(base_url(provider, "/embeddings"),
+    case HTTP.client().post(HTTP.base_url(provider, "/embeddings"),
            json: body,
            headers: headers(provider),
            receive_timeout: @receive_timeout
@@ -108,12 +98,13 @@ defmodule Arcanum.Adapters.OpenAI do
   @impl true
   def generate_image(provider, %Intent{} = intent, %ModelProfile{} = profile) do
     body =
-      %{model: intent.model, prompt: intent.prompt, n: intent.n, size: intent.size}
+      %{model: intent.model, prompt: intent.prompt, n: intent.n}
+      |> put_image_size(intent, profile)
       |> put_image_quality(intent, profile)
       |> put_image_style(intent, profile)
       |> put_image_response_format(intent, profile)
 
-    case http_client().post(base_url(provider, "/images/generations"),
+    case HTTP.client().post(HTTP.base_url(provider, "/images/generations"),
            json: body,
            headers: headers(provider),
            receive_timeout: @receive_timeout
@@ -359,7 +350,7 @@ defmodule Arcanum.Adapters.OpenAI do
   end
 
   defp parse_image_blocks(items, format) do
-    content_type = format_to_content_type(format)
+    fallback_content_type = format_to_content_type(format)
 
     Enum.map(items, fn item ->
       %{
@@ -367,7 +358,7 @@ defmodule Arcanum.Adapters.OpenAI do
         data: decode_image_data(item),
         url: item["url"],
         revised_prompt: item["revised_prompt"],
-        content_type: content_type
+        content_type: item["mime_type"] || fallback_content_type
       }
     end)
   end
@@ -380,89 +371,16 @@ defmodule Arcanum.Adapters.OpenAI do
   defp format_to_content_type("webp"), do: "image/webp"
   defp format_to_content_type(_), do: "image/png"
 
-  defp retry_chat(_provider, _body, attempt) when attempt >= @max_retry_attempts do
-    {:error, {:api_error, :max_retries_exceeded}}
-  end
-
-  defp retry_chat(provider, original_body, attempt) do
-    backoff(attempt)
-
-    case do_request(provider, original_body) do
-      {:ok, %{status: 200, body: body}} ->
-        {:ok, parse_chat_response(body)}
-
-      {:ok, %{status: status}} when status in @retriable_statuses ->
-        retry_chat(provider, original_body, attempt + 1)
-
-      {:ok, %{status: status, body: body}} ->
-        classify_api_error(status, body)
-
-      {:error, reason} ->
-        {:error, reason}
-    end
-  end
-
-  defp retry_stream(_provider, _body, attempt) when attempt >= @max_retry_attempts do
-    {:error, {:api_error, :max_retries_exceeded}}
-  end
-
-  defp retry_stream(provider, body, attempt) do
-    backoff(attempt)
-
-    case do_stream_request(provider, body) do
-      {:ok, %{status: 200, body: stream}} ->
-        {:ok, parse_sse_stream(stream)}
-
-      {:ok, %{status: status}} when status in @retriable_statuses ->
-        retry_stream(provider, body, attempt + 1)
-
-      {:ok, %{status: status, body: resp_body}} ->
-        classify_api_error(status, drain_async_body(resp_body))
-
-      {:error, reason} ->
-        {:error, reason}
-    end
-  end
-
-  defp backoff(attempt) do
-    delay = min(:timer.seconds(2) * Integer.pow(2, attempt - 1), :timer.seconds(30))
-    Process.sleep(delay)
-  end
-
   defp parse_sse_stream(stream) do
-    Stream.transform(stream, :cont, fn
-      chunk, :cont ->
-        events = parse_sse_chunk(chunk)
-
-        case Enum.find(events, &match?(:done, &1)) do
-          :done -> {events, :done}
-          nil -> {events, :cont}
-        end
-
-      _chunk, :done ->
-        {:halt, :done}
-    end)
+    SSE.stream(stream,
+      parse_event: &parse_sse_event/1,
+      done_sentinel: "[DONE]"
+    )
   end
 
-  defp parse_sse_chunk(chunk) when is_binary(chunk) do
-    chunk
-    |> String.split("\n")
-    |> Enum.flat_map(&parse_sse_line/1)
+  defp parse_sse_event(body) do
+    {:data, parse_stream_delta(body)}
   end
-
-  defp parse_sse_chunk(%{data: data}), do: parse_sse_chunk(data)
-  defp parse_sse_chunk(_), do: []
-
-  defp parse_sse_line("data: [DONE]"), do: [:done]
-
-  defp parse_sse_line("data: " <> json) do
-    case Jason.decode(json) do
-      {:ok, body} -> [{:data, parse_stream_delta(body)}]
-      {:error, _} -> []
-    end
-  end
-
-  defp parse_sse_line(_), do: []
 
   defp parse_stream_delta(body) do
     choice = List.first(body["choices"] || []) || %{}
@@ -478,7 +396,7 @@ defmodule Arcanum.Adapters.OpenAI do
   end
 
   defp do_request(provider, body) do
-    http_client().post(base_url(provider, "/chat/completions"),
+    HTTP.client().post(HTTP.base_url(provider, "/chat/completions"),
       json: body,
       headers: headers(provider),
       receive_timeout: @receive_timeout
@@ -486,7 +404,7 @@ defmodule Arcanum.Adapters.OpenAI do
   end
 
   defp do_stream_request(provider, body) do
-    http_client().post(base_url(provider, "/chat/completions"),
+    HTTP.client().post(HTTP.base_url(provider, "/chat/completions"),
       json: body,
       headers: headers(provider),
       into: :self,
@@ -506,16 +424,6 @@ defmodule Arcanum.Adapters.OpenAI do
       nil -> base
       extras when is_list(extras) -> base ++ extras
     end
-  end
-
-  defp base_url(provider, path) do
-    provider.base_url
-    |> String.trim_trailing("/")
-    |> Kernel.<>(path)
-  end
-
-  defp http_client do
-    Application.get_env(:arcanum, :http_client, Req)
   end
 
   defp parse_usage(nil), do: nil
@@ -564,22 +472,6 @@ defmodule Arcanum.Adapters.OpenAI do
   defp extract_error_message(body) when is_binary(body), do: body
   defp extract_error_message(_), do: nil
 
-  defp drain_async_body(%Req.Response.Async{} = async) do
-    raw =
-      async
-      |> Enum.to_list()
-      |> IO.iodata_to_binary()
-
-    case Jason.decode(raw) do
-      {:ok, decoded} -> decoded
-      _ -> raw
-    end
-  rescue
-    _ -> nil
-  end
-
-  defp drain_async_body(body), do: body
-
   defp extract_model_ids(%{kind: "github-copilot"}, models) do
     models
     |> Enum.reject(fn m -> get_in(m, ["policy", "state"]) == "disabled" end)
@@ -592,12 +484,19 @@ defmodule Arcanum.Adapters.OpenAI do
 
   # Profile-driven image generation params — no model name matching.
 
+  defp put_image_size(body, %Intent{size: nil}, _profile), do: body
+  defp put_image_size(body, _intent, %ModelProfile{supported_sizes: []}), do: body
+
+  defp put_image_size(body, %Intent{size: size}, _profile),
+    do: Map.put(body, :size, size)
+
   defp put_image_quality(body, %Intent{quality: nil}, _profile), do: body
+  defp put_image_quality(body, _intent, %ModelProfile{supported_qualities: []}), do: body
 
   defp put_image_quality(body, %Intent{quality: quality}, %ModelProfile{
          supported_qualities: supported
        }) do
-    if supported == [] or quality in supported do
+    if quality in supported do
       Map.put(body, :quality, quality)
     else
       body

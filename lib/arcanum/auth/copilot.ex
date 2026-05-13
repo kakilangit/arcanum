@@ -56,7 +56,11 @@ defmodule Arcanum.Auth.Copilot do
       {"user-agent", @user_agent}
     ]
 
-    case http_client().post(url, body: body, headers: headers, receive_timeout: @request_timeout) do
+    case Arcanum.HTTP.client().post(url,
+           body: body,
+           headers: headers,
+           receive_timeout: @request_timeout
+         ) do
       {:ok, %{status: 200, body: body}} ->
         parse_device_code_response(decode_body(body))
 
@@ -115,7 +119,11 @@ defmodule Arcanum.Auth.Copilot do
       {"user-agent", @user_agent}
     ]
 
-    case http_client().post(url, body: body, headers: headers, receive_timeout: @request_timeout) do
+    case Arcanum.HTTP.client().post(url,
+           body: body,
+           headers: headers,
+           receive_timeout: @request_timeout
+         ) do
       {:ok, %{status: 200, body: resp_body}} ->
         handle_single_poll(decode_body(resp_body))
 
@@ -169,7 +177,11 @@ defmodule Arcanum.Auth.Copilot do
       {"user-agent", @user_agent}
     ]
 
-    case http_client().post(url, body: body, headers: headers, receive_timeout: @request_timeout) do
+    case Arcanum.HTTP.client().post(url,
+           body: body,
+           headers: headers,
+           receive_timeout: @request_timeout
+         ) do
       {:ok, %{status: 200, body: resp_body}} ->
         handle_poll_response(decode_body(resp_body), url, device_code, interval_ms, attempt)
 
@@ -289,10 +301,6 @@ defmodule Arcanum.Auth.Copilot do
 
   defp parse_device_code_response(body) do
     {:error, {:unexpected_device_code_response, body}}
-  end
-
-  defp http_client do
-    Application.get_env(:arcanum, :http_client, Req)
   end
 
   defp client_id do

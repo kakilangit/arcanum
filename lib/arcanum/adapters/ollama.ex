@@ -17,10 +17,9 @@ defmodule Arcanum.Adapters.Ollama do
 
   use Arcanum.Provider
 
-  alias Arcanum.{Intent, ModelProfile, Response}
+  alias Arcanum.{HTTP, Intent, ModelProfile, Response, Retry}
 
   @receive_timeout :timer.minutes(5)
-  @max_retry_attempts 3
   @retriable_statuses [429, 502, 503]
 
   @doc """
@@ -30,19 +29,14 @@ defmodule Arcanum.Adapters.Ollama do
   def chat(provider, %Intent{} = intent, %ModelProfile{} = profile) do
     body = build_chat_body(intent, profile)
 
-    case do_request(provider, "/api/chat", body) do
-      {:ok, %{status: 200, body: resp}} ->
-        {:ok, parse_chat_response(resp)}
-
-      {:ok, %{status: status}} when status in @retriable_statuses ->
-        retry_chat(provider, body, 1)
-
-      {:ok, %{status: status, body: resp}} ->
-        {:error, {:api_error, status, resp}}
-
-      {:error, reason} ->
-        {:error, reason}
-    end
+    Retry.with_retry(
+      [
+        retriable_statuses: @retriable_statuses,
+        on_success: fn %{body: resp} -> {:ok, parse_chat_response(resp)} end,
+        on_error: fn status, resp -> {:error, {:api_error, status, resp}} end
+      ],
+      fn -> do_request(provider, "/api/chat", body) end
+    )
   end
 
   @doc """
@@ -52,7 +46,7 @@ defmodule Arcanum.Adapters.Ollama do
   def stream(provider, %Intent{} = intent, %ModelProfile{} = profile) do
     body = build_chat_body(intent, profile) |> Map.put(:stream, true)
 
-    case http_client().post(base_url(provider, "/api/chat"),
+    case HTTP.client().post(HTTP.base_url(provider, "/api/chat"),
            json: body,
            into: :self,
            receive_timeout: @receive_timeout
@@ -73,7 +67,7 @@ defmodule Arcanum.Adapters.Ollama do
   """
   @impl true
   def list_models(provider) do
-    case http_client().get(base_url(provider, "/api/tags"), []) do
+    case HTTP.client().get(HTTP.base_url(provider, "/api/tags"), []) do
       {:ok, %{status: 200, body: %{"models" => models}}} ->
         {:ok, Enum.map(models, & &1["name"])}
 
@@ -268,39 +262,11 @@ defmodule Arcanum.Adapters.Ollama do
   defp parse_stream_chunk(_), do: :skip
 
   defp do_request(provider, path, body) do
-    http_client().post(base_url(provider, path),
+    HTTP.client().post(HTTP.base_url(provider, path),
       json: body,
       receive_timeout: @receive_timeout
     )
   end
-
-  defp retry_chat(provider, body, attempt) when attempt >= @max_retry_attempts do
-    case do_request(provider, "/api/chat", body) do
-      {:ok, %{status: 200, body: resp}} -> {:ok, parse_chat_response(resp)}
-      {:ok, %{status: status, body: resp}} -> {:error, {:api_error, status, resp}}
-      {:error, reason} -> {:error, reason}
-    end
-  end
-
-  defp retry_chat(provider, body, attempt) do
-    Process.sleep(backoff_ms(attempt))
-
-    case do_request(provider, "/api/chat", body) do
-      {:ok, %{status: 200, body: resp}} ->
-        {:ok, parse_chat_response(resp)}
-
-      {:ok, %{status: status}} when status in @retriable_statuses ->
-        retry_chat(provider, body, attempt + 1)
-
-      {:ok, %{status: status, body: resp}} ->
-        {:error, {:api_error, status, resp}}
-
-      {:error, reason} ->
-        {:error, reason}
-    end
-  end
-
-  defp backoff_ms(attempt), do: min(:timer.seconds(attempt * 2), :timer.seconds(10))
 
   defp encode_arguments(args) when is_map(args), do: Jason.encode!(args)
   defp encode_arguments(args) when is_binary(args), do: args
@@ -324,12 +290,4 @@ defmodule Arcanum.Adapters.Ollama do
 
   defp maybe_put(map, _key, nil), do: map
   defp maybe_put(map, key, value), do: Map.put(map, key, value)
-
-  defp base_url(provider, path) do
-    String.trim_trailing(provider.base_url, "/") <> path
-  end
-
-  defp http_client do
-    Application.get_env(:arcanum, :http_client, Req)
-  end
 end

@@ -83,13 +83,23 @@
       "claude-3-opus-20240229": { "supports_vision": true }
     },
     "xai": {
-      "grok-2-vision": { "supports_vision": true },
-      "grok-3": { "supports_vision": true },
-      "grok-2-image": {
+      "grok-4-fast-non-reasoning": { "supports_vision": true },
+      "grok-4-fast-reasoning": { "supports_vision": true },
+      "grok-4.3": { "supports_vision": true },
+      "grok-imagine-image": {
         "supports_image_generation": true,
-        "supported_sizes": ["1024x1024"],
-        "supported_formats": ["png"],
-        "supported_qualities": ["standard"],
+        "supported_sizes": [],
+        "supported_formats": [],
+        "supported_qualities": [],
+        "supports_style": false,
+        "image_response_mode": "request_b64",
+        "max_outputs_per_request": 1
+      },
+      "grok-imagine-image-pro": {
+        "supports_image_generation": true,
+        "supported_sizes": [],
+        "supported_formats": [],
+        "supported_qualities": [],
         "supports_style": false,
         "image_response_mode": "request_b64",
         "max_outputs_per_request": 1

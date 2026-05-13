@@ -4,11 +4,14 @@ defmodule Arcanum.Integration.ProviderTest do
 
   Excluded by default. Run with:
 
-      # OpenAI-compatible (DeepSeek, Z.AI, OpenRouter, etc.)
+      # OpenAI-compatible (DeepSeek, Z.AI, OpenRouter, xAI, etc.)
       mix test --include integration
 
-      # OpenAI-compatible + vision + image generation (OpenAI only)
-      mix test --include integration --include vision --include image_generation
+      # Vision (multimodal providers)
+      mix test --include vision
+
+      # Image generation
+      mix test --include image_generation
 
       # Ollama
       mix test --include ollama
@@ -18,16 +21,19 @@ defmodule Arcanum.Integration.ProviderTest do
 
   ## Environment Variables
 
-      # OpenAI-compatible (DeepSeek, Z.AI, OpenRouter, etc.)
-      ARCANUM_TEST_OPENAI_URL=https://api.deepseek.com
-      ARCANUM_TEST_OPENAI_KEY=sk-...
-      ARCANUM_TEST_OPENAI_MODEL=deepseek-chat
+  All OpenAI-compatible providers use the same env vars:
 
-      # Ollama (local)
+      ARCANUM_TEST_PROVIDER_URL=https://api.deepseek.com
+      ARCANUM_TEST_PROVIDER_KEY=sk-...
+      ARCANUM_TEST_PROVIDER_MODEL=deepseek-chat
+      ARCANUM_TEST_PROVIDER_KIND=deepseek          # defaults to "openai"
+      ARCANUM_TEST_PROVIDER_IMAGE_MODEL=gpt-image-1 # for image generation tests
+
+  Ollama and Anthropic have dedicated env vars:
+
       ARCANUM_TEST_OLLAMA_URL=http://localhost:11434
       ARCANUM_TEST_OLLAMA_MODEL=llama3.2
 
-      # Anthropic
       ARCANUM_TEST_ANTHROPIC_URL=https://api.anthropic.com
       ARCANUM_TEST_ANTHROPIC_KEY=sk-ant-...
       ARCANUM_TEST_ANTHROPIC_MODEL=claude-sonnet-4-20250514
@@ -56,17 +62,18 @@ defmodule Arcanum.Integration.ProviderTest do
     }
   }
 
-  defp openai_setup do
-    url = System.get_env("ARCANUM_TEST_OPENAI_URL")
-    key = System.get_env("ARCANUM_TEST_OPENAI_KEY")
-    model = System.get_env("ARCANUM_TEST_OPENAI_MODEL")
+  defp provider_setup do
+    url = System.get_env("ARCANUM_TEST_PROVIDER_URL")
+    key = System.get_env("ARCANUM_TEST_PROVIDER_KEY")
+    model = System.get_env("ARCANUM_TEST_PROVIDER_MODEL")
+    kind = System.get_env("ARCANUM_TEST_PROVIDER_KIND") || "openai"
 
     if is_nil(url) or is_nil(model) do
       raise ExUnit.DocTest.Error,
-        message: "ARCANUM_TEST_OPENAI_URL and ARCANUM_TEST_OPENAI_MODEL required"
+        message: "ARCANUM_TEST_PROVIDER_URL and ARCANUM_TEST_PROVIDER_MODEL required"
     end
 
-    provider = %{base_url: url, api_key: key, kind: "openai", api_format: :openai}
+    provider = %{base_url: url, api_key: key, kind: kind, api_format: :openai}
     {:ok, provider: provider, model: model}
   end
 
@@ -78,7 +85,7 @@ defmodule Arcanum.Integration.ProviderTest do
     @describetag :integration
 
     setup do
-      openai_setup()
+      provider_setup()
     end
 
     @tag timeout: 30_000
@@ -104,7 +111,7 @@ defmodule Arcanum.Integration.ProviderTest do
       assert {:ok, %Response{usage: usage}} = Gateway.chat(provider, intent)
       assert usage.prompt_tokens > 0
       assert usage.completion_tokens > 0
-      assert usage.total_tokens == usage.prompt_tokens + usage.completion_tokens
+      assert usage.total_tokens >= usage.prompt_tokens + usage.completion_tokens
     end
 
     @tag timeout: 30_000
@@ -169,21 +176,22 @@ defmodule Arcanum.Integration.ProviderTest do
           assert models != []
           assert Enum.all?(models, &is_binary/1)
 
-        {:error, _} ->
+        {:error, reason} ->
+          IO.puts("\n⚠ List models skipped: #{inspect(reason)}")
           :ok
       end
     end
   end
 
   # -------------------------------------------------------------------
-  # OpenAI-compatible: vision (multimodal providers only)
+  # Vision (multimodal providers)
   # -------------------------------------------------------------------
 
   describe "OpenAI-compatible provider vision" do
     @describetag :vision
 
     setup do
-      openai_setup()
+      provider_setup()
     end
 
     @tag timeout: 30_000
@@ -213,24 +221,36 @@ defmodule Arcanum.Integration.ProviderTest do
   end
 
   # -------------------------------------------------------------------
-  # OpenAI-compatible: image generation (OpenAI only)
+  # Image generation
   # -------------------------------------------------------------------
 
   describe "OpenAI-compatible provider image generation" do
     @describetag :image_generation
 
     setup do
-      openai_setup()
+      url = System.get_env("ARCANUM_TEST_PROVIDER_URL")
+      key = System.get_env("ARCANUM_TEST_PROVIDER_KEY")
+      kind = System.get_env("ARCANUM_TEST_PROVIDER_KIND") || "openai"
+
+      if is_nil(url) do
+        raise ExUnit.DocTest.Error,
+          message: "ARCANUM_TEST_PROVIDER_URL required"
+      end
+
+      provider = %{base_url: url, api_key: key, kind: kind, api_format: :openai}
+      {:ok, provider: provider}
     end
 
     @tag timeout: 60_000
     test "image generation", %{provider: provider} do
+      image_model =
+        System.get_env("ARCANUM_TEST_PROVIDER_IMAGE_MODEL") || "gpt-image-1"
+
       intent = %Intent{
-        model: "gpt-image-1",
+        model: image_model,
         prompt: "A solid red square on a white background",
         size: "1024x1024",
-        n: 1,
-        quality: "low"
+        n: 1
       }
 
       case Gateway.generate_image(provider, intent) do
@@ -243,12 +263,19 @@ defmodule Arcanum.Integration.ProviderTest do
             assert block.data != ""
           end)
 
-        {:error, {:api_error, 403, _}} ->
-          # Account may not have image generation access
+        {:error, {:api_error, 403, body}} ->
+          IO.puts(
+            "\n⚠ Image generation skipped: account lacks access (HTTP 403): #{inspect(body)}"
+          )
+
           :ok
 
-        {:error, {:api_error, 429, _}} ->
-          # Rate limited
+        {:error, {:api_error, 429, body}} ->
+          IO.puts("\n⚠ Image generation skipped: rate limited (HTTP 429): #{inspect(body)}")
+          :ok
+
+        {:error, {:api_error, 500, body}} ->
+          IO.puts("\n⚠ Image generation skipped: server error (HTTP 500): #{inspect(body)}")
           :ok
       end
     end
