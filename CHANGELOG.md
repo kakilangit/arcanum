@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-05-13
+
 ### Changed
 
 - **Extracted `Arcanum.HTTP`**: Shared HTTP client (`client/0`), URL construction (`base_url/2`, `base_url_strip_v1/2`), and async body draining (`drain_async_body/1`) — replaces 4 duplicated copies across adapters and Copilot auth.
@@ -15,11 +17,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Bounded async drain**: `drain_async_body/1` now enforces a 10 MB byte limit to prevent unbounded memory consumption.
 - **Regression script**: Added `--skip-vision` and `--skip-image-gen` flags to `test/regression.sh`.
 - **Makefile**: Added `make regression` target.
-
-## [0.1.2] - 2026-05-13
-
-### Changed
-
 - **Unified content blocks**: `Intent.content` and `Response.content` are always `[content_block()]`. Bare string content is no longer accepted — callers must use `Intent.text/1` to wrap text. `Response.text/1` helper extracts text from content blocks.
 - **Provider behaviour**: `use Arcanum.Provider` macro replaces `@behaviour` + `@optional_callbacks`. Optional callbacks (`embed/3`, `generate_image/3`, `generate_video/3`) now have `defoverridable` default implementations returning `{:error, :not_supported}`. Adapters override only what they support.
 - **Gateway**: Direct adapter dispatch replaces `apply/3` + `function_exported?` runtime detection. No runtime capability checks — capabilities are declared statically at compile time.
