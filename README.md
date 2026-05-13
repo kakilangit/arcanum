@@ -143,7 +143,7 @@ intent = %Intent{
 # embeddings is a list of floats
 ```
 
-Supported by OpenAI and Ollama adapters. Returns `{:error, :not_supported}` for others.
+Supported by OpenAI and Ollama adapters. Returns `{:error, :not_supported}` for adapters that don't override the default.
 
 ### Image Generation
 
@@ -170,7 +170,7 @@ media_intent = %MediaIntent{
 {:ok, %Arcanum.MediaResponse{items: items}} = Gateway.generate_video(provider, media_intent)
 ```
 
-Both `generate_image/3` and `generate_video/3` return `{:error, :not_supported}` if the adapter doesn't implement the callback.
+Both `generate_image/3` and `generate_video/3` return `{:error, :not_supported}` for adapters that don't override the default implementation.
 
 ### List Models
 
@@ -377,7 +377,7 @@ Gateway (single public entry point)
 | `Arcanum.ModelProfile.Resolver` | Multi-layer profile resolution with override support. |
 | `Arcanum.ModelProfile.Registry` | ETS cache backed by models.dev, refreshed hourly. |
 | `Arcanum.Response.Normalizer` | Profile-driven post-processing (XML/JSON tool extraction, think tags). |
-| `Arcanum.Provider` | Behaviour that all adapters implement. |
+| `Arcanum.Provider` | Behaviour + macro (`use Arcanum.Provider`) with defoverridable defaults. |
 | `Arcanum.Probe` | TCP availability check for local providers. |
 | `Arcanum.EnsureModel` | Pre-loads models on LM Studio before inference. |
 | `Arcanum.Auth.Copilot` | GitHub Copilot OAuth device code flow (RFC 8628). |

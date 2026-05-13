@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Provider behaviour**: `use Arcanum.Provider` macro replaces `@behaviour` + `@optional_callbacks`. Optional callbacks (`embed/3`, `generate_image/3`, `generate_video/3`) now have `defoverridable` default implementations returning `{:error, :not_supported}`. Adapters override only what they support.
+- **Gateway**: Direct adapter dispatch replaces `apply/3` + `function_exported?` runtime detection. No runtime capability checks — capabilities are declared statically at compile time.
+
+### Added
+
+- **Overlay system**: Profile-driven image generation params (`supported_qualities`, `supports_style`, `image_response_mode`) with overlays for gpt-image-1, dall-e-3, dall-e-2, grok-2-image
+- **Media generation**: `MediaIntent` / `MediaResponse` structs and `Gateway.generate_image/3` / `Gateway.generate_video/3` functions
+- **ModelProfile fields**: `uses_max_completion_tokens` flag for newer OpenAI models
+- **Ollama adapter**: Multimodal (vision) support
+- **Resolver**: Generic overlay resolution with nested provider→model map structure
+
 ## [0.1.1] - 2026-05-12
 
 ### Fixed
