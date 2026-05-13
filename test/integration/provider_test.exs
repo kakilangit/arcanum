@@ -262,12 +262,16 @@ defmodule Arcanum.Integration.ProviderTest do
             assert block.data != ""
           end)
 
-        {:error, {:api_error, 403, _}} ->
-          # Account may not have image generation access
+        {:error, {:api_error, 403, body}} ->
+          IO.puts("\n⚠ Image generation skipped: account lacks access (HTTP 403): #{inspect(body)}")
           :ok
 
-        {:error, {:api_error, 429, _}} ->
-          # Rate limited
+        {:error, {:api_error, 429, body}} ->
+          IO.puts("\n⚠ Image generation skipped: rate limited (HTTP 429): #{inspect(body)}")
+          :ok
+
+        {:error, {:api_error, 500, body}} ->
+          IO.puts("\n⚠ Image generation skipped: server error (HTTP 500): #{inspect(body)}")
           :ok
       end
     end
