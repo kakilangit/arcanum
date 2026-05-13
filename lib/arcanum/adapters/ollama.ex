@@ -15,7 +15,7 @@ defmodule Arcanum.Adapters.Ollama do
   canonical content blocks.
   """
 
-  @behaviour Arcanum.Provider
+  use Arcanum.Provider
 
   alias Arcanum.{Intent, ModelProfile, Response}
 

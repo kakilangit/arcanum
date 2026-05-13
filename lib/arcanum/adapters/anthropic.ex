@@ -11,7 +11,7 @@ defmodule Arcanum.Adapters.Anthropic do
   - Multimodal content blocks (text + images)
   """
 
-  @behaviour Arcanum.Provider
+  use Arcanum.Provider
 
   alias Arcanum.{Intent, ModelProfile, Response}
 

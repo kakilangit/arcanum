@@ -13,7 +13,7 @@ defmodule Arcanum.Adapters.OpenAI do
   is handled by `Response.Normalizer` in the Gateway layer.
   """
 
-  @behaviour Arcanum.Provider
+  use Arcanum.Provider
 
   alias Arcanum.{Intent, MediaIntent, MediaResponse, ModelProfile, Response}
 

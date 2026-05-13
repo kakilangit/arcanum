@@ -7,6 +7,13 @@ defmodule Arcanum.Provider do
   and media generation.
 
   All provider/model-specific serialization decisions are driven by `ModelProfile`.
+
+  ## Usage
+
+      use Arcanum.Provider
+
+  Optional callbacks (`embed/3`, `generate_image/3`, `generate_video/3`) return
+  `{:error, :not_supported}` by default. Override only what the adapter supports.
   """
 
   alias Arcanum.{Intent, MediaIntent, MediaResponse, ModelProfile, Response}
@@ -58,5 +65,20 @@ defmodule Arcanum.Provider do
             ) ::
               {:ok, MediaResponse.t()} | {:error, term()}
 
-  @optional_callbacks [embed: 3, generate_image: 3, generate_video: 3]
+  defmacro __using__(_opts) do
+    quote do
+      @behaviour Arcanum.Provider
+
+      @impl Arcanum.Provider
+      def embed(_provider, _model, _input), do: {:error, :not_supported}
+
+      @impl Arcanum.Provider
+      def generate_image(_provider, _intent, _profile), do: {:error, :not_supported}
+
+      @impl Arcanum.Provider
+      def generate_video(_provider, _intent, _profile), do: {:error, :not_supported}
+
+      defoverridable embed: 3, generate_image: 3, generate_video: 3
+    end
+  end
 end

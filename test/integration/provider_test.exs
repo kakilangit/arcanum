@@ -204,8 +204,7 @@ defmodule Arcanum.Integration.ProviderTest do
 
       case Gateway.generate_image(provider, intent) do
         {:ok, %MediaResponse{items: items}} ->
-          assert is_list(items)
-          assert length(items) >= 1
+          assert [_ | _] = items
 
           Enum.each(items, fn item ->
             assert is_binary(item.data)
