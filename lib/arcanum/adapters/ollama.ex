@@ -55,6 +55,8 @@ defmodule Arcanum.Adapters.Ollama do
         {:ok, parse_stream(stream)}
 
       {:ok, %{status: status, body: resp}} ->
+        require Logger
+        Logger.warning("Ollama stream error #{status}: #{inspect(resp, limit: :infinity)}")
         {:error, {:api_error, status, resp}}
 
       {:error, reason} ->

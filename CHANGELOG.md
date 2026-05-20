@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-05-20
+
+### Fixed
+
+- **`adapter_for/1` atom kind matching**: All `kind` and `api_format` guards now accept both atoms and strings. Fixes adapter routing for consumers using Ecto.Enum (atoms) — previously only string kinds matched, causing Ollama requests to be routed through the OpenAI adapter and fail with HTTP 400.
+- **Ollama stream error logging**: Stream errors now log the status and response body at warning level for debuggability.
+
+### Added
+
+- **Ollama integration tests**: Streaming, system prompt handling, embeddings, and atom-kind compatibility tests.
+- **`adapter_for/1` unit tests**: Exhaustive coverage of all format/kind combinations with both atom and string values.
+
 ## [0.1.2] - 2026-05-13
 
 ### Changed
@@ -93,7 +105,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Async body drain**: Streaming errors drain the `Req.Response.Async` body at the adapter layer — callers never receive opaque structs
 - **Base URL handling**: Strips trailing `/v1` before appending API paths, correctly handles versioned paths (Z.AI `/v4`)
 
-[Unreleased]: https://github.com/kakilangit/arcanum/compare/v0.1.2...HEAD
+[Unreleased]: https://github.com/kakilangit/arcanum/compare/v0.1.3...HEAD
+[0.1.3]: https://github.com/kakilangit/arcanum/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/kakilangit/arcanum/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/kakilangit/arcanum/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/kakilangit/arcanum/releases/tag/v0.1.0

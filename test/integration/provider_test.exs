@@ -312,6 +312,66 @@ defmodule Arcanum.Integration.ProviderTest do
       assert Response.text(%Response{content: content}) != nil
     end
 
+    @tag timeout: 60_000
+    test "chat with atom kind (Ecto.Enum compat)", %{provider: provider, model: model} do
+      atom_provider = %{provider | kind: :ollama}
+
+      intent = %Intent{
+        messages: [%{role: :user, content: [%{type: :text, text: "Reply with exactly: PONG"}]}],
+        model: model,
+        temperature: 0.0
+      }
+
+      assert {:ok, %Response{content: content}} = Gateway.chat(atom_provider, intent)
+      assert [_ | _] = content
+    end
+
+    @tag timeout: 60_000
+    test "streaming", %{provider: provider, model: model} do
+      intent = %Intent{
+        messages: [%{role: :user, content: [%{type: :text, text: "Count from 1 to 3"}]}],
+        model: model,
+        temperature: 0.0
+      }
+
+      assert {:ok, stream} = Gateway.stream(provider, intent)
+
+      chunks = Enum.to_list(stream)
+      assert chunks != []
+
+      data_chunks = Enum.filter(chunks, &match?({:data, %Response{}}, &1))
+      assert data_chunks != []
+    end
+
+    @tag timeout: 60_000
+    test "chat with system prompt", %{provider: provider, model: model} do
+      intent = %Intent{
+        messages: [
+          %{role: :system, content: [%{type: :text, text: "You always reply with BEEP."}]},
+          %{role: :user, content: [%{type: :text, text: "Say something."}]}
+        ],
+        model: model,
+        temperature: 0.0
+      }
+
+      assert {:ok, %Response{content: content}} = Gateway.chat(provider, intent)
+      assert [_ | _] = content
+    end
+
+    @tag timeout: 60_000
+    test "embeddings", %{provider: provider, model: model} do
+      case Gateway.embed(provider, model, "Hello world") do
+        {:ok, embeddings} ->
+          assert is_list(embeddings)
+          assert [_ | _] = embeddings
+          assert Enum.all?(List.first(embeddings), &is_float/1)
+
+        {:error, {:api_error, 400, _}} ->
+          # Model may not support embeddings
+          :ok
+      end
+    end
+
     @tag timeout: 30_000
     test "list models", %{provider: provider} do
       assert {:ok, models} = Gateway.list_models(provider)

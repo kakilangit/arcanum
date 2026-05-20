@@ -10,15 +10,14 @@ defmodule Arcanum do
   @doc """
   Returns the adapter module for the given provider.
   """
-  def adapter_for(%{api_format: :openai}), do: OpenAI
-  def adapter_for(%{api_format: :anthropic}), do: Anthropic
+  def adapter_for(%{api_format: format}) when format in [:openai, "openai"], do: OpenAI
+  def adapter_for(%{api_format: format}) when format in [:anthropic, "anthropic"], do: Anthropic
 
-  def adapter_for(%{kind: "ollama"}), do: Ollama
-  def adapter_for(%{api_format: :custom, kind: "ollama"}), do: Ollama
+  def adapter_for(%{kind: kind}) when kind in [:ollama, "ollama"], do: Ollama
 
   # Copilot uses OpenAI-compatible API with extra headers
-  def adapter_for(%{kind: "github-copilot"}), do: OpenAI
+  def adapter_for(%{kind: kind}) when kind in [:"github-copilot", "github-copilot"], do: OpenAI
 
   # Custom providers with openai/anthropic-compatible APIs
-  def adapter_for(%{api_format: :custom}), do: OpenAI
+  def adapter_for(%{api_format: format}) when format in [:custom, "custom"], do: OpenAI
 end
