@@ -12,7 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - **`adapter_for/1` atom kind matching**: All `kind` and `api_format` guards now accept both atoms and strings. Fixes adapter routing for consumers using Ecto.Enum (atoms) — previously only string kinds matched, causing Ollama requests to be routed through the OpenAI adapter and fail with HTTP 400.
-- **Ollama stream error logging**: Stream errors now log the status and response body at warning level for debuggability.
+- **Ollama stream error body drain**: Streaming error responses now drain the `Req.Response.Async` body via `HTTP.drain_async_body/1` to extract the actual error message. Previously logged the opaque `#Req.Response.Async<...>` struct.
+- **Ollama stream error logging**: Stream errors now log the status and response body at warning level for debuggability. `require Logger` moved to module top.
 
 ### Added
 

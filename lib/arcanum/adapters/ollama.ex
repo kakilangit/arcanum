@@ -17,6 +17,8 @@ defmodule Arcanum.Adapters.Ollama do
 
   use Arcanum.Provider
 
+  require Logger
+
   alias Arcanum.{HTTP, Intent, ModelProfile, Response, Retry}
 
   @receive_timeout :timer.minutes(5)
@@ -54,8 +56,12 @@ defmodule Arcanum.Adapters.Ollama do
       {:ok, %{status: 200, body: stream}} ->
         {:ok, parse_stream(stream)}
 
+      {:ok, %{status: status, body: %Req.Response.Async{} = async}} ->
+        error_body = HTTP.drain_async_body(async)
+        Logger.warning("Ollama stream error #{status}: #{inspect(error_body)}")
+        {:error, {:api_error, status, error_body}}
+
       {:ok, %{status: status, body: resp}} ->
-        require Logger
         Logger.warning("Ollama stream error #{status}: #{inspect(resp, limit: :infinity)}")
         {:error, {:api_error, status, resp}}
 
