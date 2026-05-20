@@ -24,7 +24,7 @@ Arcanum provides a unified interface for chat completion, streaming, embeddings,
 ```elixir
 def deps do
   [
-    {:arcanum, "~> 0.1.2"}
+    {:arcanum, "~> 0.1.3"}
   ]
 end
 ```
