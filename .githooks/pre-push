@@ -1,0 +1,16 @@
+#!/bin/sh
+
+# Prevent pushing directly to the main branch.
+# Pushes should go through pull requests.
+
+protected_branch="main"
+
+while read local_ref local_sha remote_ref remote_sha; do
+  if [ "$remote_ref" = "refs/heads/$protected_branch" ]; then
+    echo "ERROR: Direct push to '$protected_branch' is not allowed."
+    echo "       Please use a pull request instead."
+    exit 1
+  fi
+done
+
+exit 0
