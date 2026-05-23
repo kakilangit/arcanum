@@ -18,6 +18,7 @@ defmodule Arcanum.Probe do
   """
   @spec probe_provider(map()) :: :online | :offline
   def probe_provider(%{type: :cloud}), do: :online
+  def probe_provider(%{api_format: format}) when format in [:grimoire, "grimoire"], do: :online
 
   def probe_provider(provider) do
     case parse_host_port(provider.base_url) do

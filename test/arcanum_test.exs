@@ -1,9 +1,17 @@
 defmodule ArcanumeTest do
   use ExUnit.Case, async: true
 
-  alias Arcanum.Adapters.{Anthropic, Ollama, OpenAI}
+  alias Arcanum.Adapters.{Anthropic, Grimoire, Ollama, OpenAI}
 
   describe "adapter_for/1" do
+    test "grimoire format as atom" do
+      assert Arcanum.adapter_for(%{api_format: :grimoire}) == Grimoire
+    end
+
+    test "grimoire format as string" do
+      assert Arcanum.adapter_for(%{api_format: "grimoire"}) == Grimoire
+    end
+
     test "openai format as atom" do
       assert Arcanum.adapter_for(%{api_format: :openai}) == OpenAI
     end
