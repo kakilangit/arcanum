@@ -5,11 +5,12 @@ defmodule Arcanum do
   Routes requests to the correct adapter based on the provider's `api_format`.
   """
 
-  alias Arcanum.Adapters.{Anthropic, Ollama, OpenAI}
+  alias Arcanum.Adapters.{Anthropic, Grimoire, Ollama, OpenAI}
 
   @doc """
   Returns the adapter module for the given provider.
   """
+  def adapter_for(%{api_format: format}) when format in [:grimoire, "grimoire"], do: Grimoire
   def adapter_for(%{api_format: format}) when format in [:openai, "openai"], do: OpenAI
   def adapter_for(%{api_format: format}) when format in [:anthropic, "anthropic"], do: Anthropic
 
