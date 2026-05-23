@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.5] - 2026-05-24
+
+### Fixed
+
+- xAI Grok models now use `max_completion_tokens` instead of `max_tokens`
+
 ## [0.1.4] - 2026-05-23
 
 ### Added
