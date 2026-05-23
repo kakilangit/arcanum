@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.6] - 2026-05-24
+
+### Fixed
+
+- Add `deepseek-v4-pro` to overlays with `preserve_reasoning: true` — fixes reasoning_content passback error
+
 ## [0.1.5] - 2026-05-24
 
 ### Fixed
