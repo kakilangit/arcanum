@@ -13,6 +13,7 @@ Arcanum provides a unified interface for chat completion, streaming, embeddings,
 | OpenAI | OpenAI | Chat, stream, tools, vision, image generation, embeddings |
 | Anthropic | Anthropic | Chat, stream, tools, vision |
 | Ollama | Ollama | Chat, stream, tools, vision, embeddings |
+| Grimoire | Grimoire | Chat, stream, model listing (plugin-based providers) |
 | DeepSeek | OpenAI | Chat, stream, tools |
 | GitHub Copilot | OpenAI | Chat, stream, tools, vision (OAuth device flow) |
 | OpenRouter | OpenAI | Chat, stream, tools |
@@ -24,7 +25,7 @@ Arcanum provides a unified interface for chat completion, streaming, embeddings,
 ```elixir
 def deps do
   [
-    {:arcanum, "~> 0.1.3"}
+    {:arcanum, "~> 0.1.4"}
   ]
 end
 ```
@@ -51,7 +52,7 @@ provider = %{
 |-----|------|-------------|
 | `base_url` | `String.t()` | Required. Provider API base URL. |
 | `api_key` | `String.t() \| nil` | API key. Not needed for local providers or Copilot. |
-| `api_format` | `:openai \| :anthropic \| :custom` | Determines which adapter handles the request. |
+| `api_format` | `:openai \| :anthropic \| :grimoire \| :custom` | Determines which adapter handles the request. |
 | `kind` | `String.t()` | Provider ID (e.g. `"openai"`, `"anthropic"`, `"ollama"`, `"github-copilot"`). Used for profile resolution and provider-specific behavior. |
 | `type` | `:cloud \| :local` | Used by `Arcanum.Probe` to skip TCP checks for cloud providers. |
 | `extra_headers` | `[{String.t(), String.t()}] \| nil` | Additional HTTP headers (injected automatically for Copilot). |
@@ -392,6 +393,7 @@ Gateway (single public entry point)
 | `Arcanum.Adapters.OpenAI` | `chat`, `stream`, `list_models`, `embed`, `generate_image` |
 | `Arcanum.Adapters.Anthropic` | `chat`, `stream`, `list_models` |
 | `Arcanum.Adapters.Ollama` | `chat`, `stream`, `list_models`, `embed` |
+| `Arcanum.Adapters.Grimoire` | `chat`, `stream`, `list_models` |
 
 ### Error Handling
 
