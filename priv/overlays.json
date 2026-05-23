@@ -40,14 +40,32 @@
     },
     "openai": {
       "gpt-4o": { "supports_vision": true, "uses_max_completion_tokens": true },
-      "gpt-4o-mini": { "supports_vision": true, "uses_max_completion_tokens": true },
-      "gpt-4.1": { "supports_vision": true, "uses_max_completion_tokens": true },
-      "gpt-4.1-mini": { "supports_vision": true, "uses_max_completion_tokens": true },
-      "gpt-4.1-nano": { "supports_vision": true, "uses_max_completion_tokens": true },
-      "gpt-5.1": { "supports_vision": true, "uses_max_completion_tokens": true },
+      "gpt-4o-mini": {
+        "supports_vision": true,
+        "uses_max_completion_tokens": true
+      },
+      "gpt-4.1": {
+        "supports_vision": true,
+        "uses_max_completion_tokens": true
+      },
+      "gpt-4.1-mini": {
+        "supports_vision": true,
+        "uses_max_completion_tokens": true
+      },
+      "gpt-4.1-nano": {
+        "supports_vision": true,
+        "uses_max_completion_tokens": true
+      },
+      "gpt-5.1": {
+        "supports_vision": true,
+        "uses_max_completion_tokens": true
+      },
       "o1": { "supports_vision": true, "uses_max_completion_tokens": true },
       "o3": { "supports_vision": true, "uses_max_completion_tokens": true },
-      "o4-mini": { "supports_vision": true, "uses_max_completion_tokens": true },
+      "o4-mini": {
+        "supports_vision": true,
+        "uses_max_completion_tokens": true
+      },
       "gpt-image-1": {
         "supports_image_generation": true,
         "supported_sizes": ["1024x1024", "1024x1536", "1536x1024", "auto"],
@@ -83,9 +101,18 @@
       "claude-3-opus-20240229": { "supports_vision": true }
     },
     "xai": {
-      "grok-4-fast-non-reasoning": { "supports_vision": true },
-      "grok-4-fast-reasoning": { "supports_vision": true },
-      "grok-4.3": { "supports_vision": true },
+      "grok-4-fast-non-reasoning": {
+        "supports_vision": true,
+        "uses_max_completion_tokens": true
+      },
+      "grok-4-fast-reasoning": {
+        "supports_vision": true,
+        "uses_max_completion_tokens": true
+      },
+      "grok-4.3": {
+        "supports_vision": true,
+        "uses_max_completion_tokens": true
+      },
       "grok-imagine-image": {
         "supports_image_generation": true,
         "supported_sizes": [],
@@ -107,11 +134,23 @@
     },
     "github-copilot": {
       "gpt-4o": { "supports_vision": true, "uses_max_completion_tokens": true },
-      "gpt-4.1": { "supports_vision": true, "uses_max_completion_tokens": true },
-      "gpt-4.1-mini": { "supports_vision": true, "uses_max_completion_tokens": true },
-      "gpt-4.1-nano": { "supports_vision": true, "uses_max_completion_tokens": true },
+      "gpt-4.1": {
+        "supports_vision": true,
+        "uses_max_completion_tokens": true
+      },
+      "gpt-4.1-mini": {
+        "supports_vision": true,
+        "uses_max_completion_tokens": true
+      },
+      "gpt-4.1-nano": {
+        "supports_vision": true,
+        "uses_max_completion_tokens": true
+      },
       "o3": { "supports_vision": true, "uses_max_completion_tokens": true },
-      "o4-mini": { "supports_vision": true, "uses_max_completion_tokens": true },
+      "o4-mini": {
+        "supports_vision": true,
+        "uses_max_completion_tokens": true
+      },
       "claude-sonnet-4": { "supports_vision": true },
       "claude-opus-4.6": { "supports_vision": true }
     },
