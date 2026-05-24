@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.9] - 2026-05-24
+
+### Added
+
+- `temperature_not_supported` model profile field — adapters strip temperature from requests when set
+- Overlays for OpenAI models: `gpt-5`, `gpt-5-nano`, `gpt-5.2`, `gpt-5.4`, `gpt-5.4-mini`, `gpt-5.4-nano`, `gpt-5.5` with `uses_max_completion_tokens`
+- Temperature stripping for reasoning models: `gpt-5`, `gpt-5-mini`, `gpt-5-nano`, `gpt-5.5`, `o1`, `o3`, `o3-mini`, `o4-mini`, `claude-opus-4-7`
+- Overlays for xAI `grok-4.20-0309-non-reasoning` and `grok-4.20-0309-reasoning`
+
 ## [0.1.8] - 2026-05-24
 
 ### Added
@@ -144,7 +153,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Async body drain**: Streaming errors drain the `Req.Response.Async` body at the adapter layer — callers never receive opaque structs
 - **Base URL handling**: Strips trailing `/v1` before appending API paths, correctly handles versioned paths (Z.AI `/v4`)
 
-[Unreleased]: https://github.com/kakilangit/arcanum/compare/v0.1.8...HEAD
+[Unreleased]: https://github.com/kakilangit/arcanum/compare/v0.1.9...HEAD
+[0.1.9]: https://github.com/kakilangit/arcanum/compare/v0.1.8...v0.1.9
 [0.1.8]: https://github.com/kakilangit/arcanum/compare/v0.1.7...v0.1.8
 [0.1.7]: https://github.com/kakilangit/arcanum/compare/v0.1.6...v0.1.7
 [0.1.6]: https://github.com/kakilangit/arcanum/compare/v0.1.5...v0.1.6
