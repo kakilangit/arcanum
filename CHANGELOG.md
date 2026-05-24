@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.8] - 2026-05-24
+
+### Added
+
+- Model verification scripts (`test/verify_models.exs`, `test/list_models.exs`) for comprehensive multi-provider testing
+  - Tests chat, tool_call, and streaming capabilities per model
+  - Supports `--provider` filter for targeted runs
+  - Reports pass/fail matrix with failure details and summary
+
+## [0.1.7] - 2026-05-24
+
+### Fixed
+
+- Add `gpt-5-mini` overlay with `uses_max_completion_tokens: true`
+
 ## [0.1.6] - 2026-05-24
 
 ### Fixed
@@ -129,7 +144,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Async body drain**: Streaming errors drain the `Req.Response.Async` body at the adapter layer — callers never receive opaque structs
 - **Base URL handling**: Strips trailing `/v1` before appending API paths, correctly handles versioned paths (Z.AI `/v4`)
 
-[Unreleased]: https://github.com/kakilangit/arcanum/compare/v0.1.4...HEAD
+[Unreleased]: https://github.com/kakilangit/arcanum/compare/v0.1.8...HEAD
+[0.1.8]: https://github.com/kakilangit/arcanum/compare/v0.1.7...v0.1.8
+[0.1.7]: https://github.com/kakilangit/arcanum/compare/v0.1.6...v0.1.7
+[0.1.6]: https://github.com/kakilangit/arcanum/compare/v0.1.5...v0.1.6
+[0.1.5]: https://github.com/kakilangit/arcanum/compare/v0.1.4...v0.1.5
 [0.1.4]: https://github.com/kakilangit/arcanum/compare/v0.1.3...v0.1.4
 [0.1.3]: https://github.com/kakilangit/arcanum/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/kakilangit/arcanum/compare/v0.1.1...v0.1.2
