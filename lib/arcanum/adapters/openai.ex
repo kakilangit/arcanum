@@ -127,12 +127,19 @@ defmodule Arcanum.Adapters.OpenAI do
 
     body = %{model: intent.model, messages: messages}
     body = if tools, do: Map.put(body, :tools, tools), else: body
-    body = if intent.temperature, do: Map.put(body, :temperature, intent.temperature), else: body
+    body = apply_temperature(body, intent, profile)
     body = apply_max_tokens(body, intent, profile)
     body = apply_thinking_param(body, profile)
 
     apply_provider_routing(body, profile)
   end
+
+  defp apply_temperature(body, _intent, %{temperature_not_supported: true}), do: body
+
+  defp apply_temperature(body, %{temperature: nil}, _profile), do: body
+
+  defp apply_temperature(body, %{temperature: temp}, _profile),
+    do: Map.put(body, :temperature, temp)
 
   defp prepare_tools(%Intent{tools: nil} = intent, _profile), do: {intent.messages, nil}
   defp prepare_tools(%Intent{tools: []} = intent, _profile), do: {intent.messages, nil}

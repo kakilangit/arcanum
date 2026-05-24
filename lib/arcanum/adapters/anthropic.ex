@@ -75,12 +75,18 @@ defmodule Arcanum.Adapters.Anthropic do
         do: Map.put(body, :tools, to_anthropic_tools(intent.tools)),
         else: body
 
-    body = if intent.temperature, do: Map.put(body, :temperature, intent.temperature), else: body
+    body = apply_temperature(body, intent, profile)
 
     if intent.max_tokens,
       do: Map.put(body, :max_tokens, intent.max_tokens),
       else: Map.put(body, :max_tokens, 4096)
   end
+
+  defp apply_temperature(body, _intent, %{temperature_not_supported: true}), do: body
+  defp apply_temperature(body, %{temperature: nil}, _profile), do: body
+
+  defp apply_temperature(body, %{temperature: temp}, _profile),
+    do: Map.put(body, :temperature, temp)
 
   defp extract_system(messages) do
     {system_msgs, rest} = Enum.split_while(messages, &system_role?/1)

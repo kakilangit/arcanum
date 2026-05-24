@@ -57,19 +57,65 @@
         "supports_vision": true,
         "uses_max_completion_tokens": true
       },
+      "gpt-5": {
+        "supports_vision": true,
+        "uses_max_completion_tokens": true,
+        "temperature_not_supported": true
+      },
+      "gpt-5-mini": {
+        "supports_vision": true,
+        "uses_max_completion_tokens": true,
+        "temperature_not_supported": true
+      },
+      "gpt-5-nano": {
+        "supports_vision": true,
+        "uses_max_completion_tokens": true,
+        "temperature_not_supported": true
+      },
       "gpt-5.1": {
         "supports_vision": true,
         "uses_max_completion_tokens": true
       },
-      "gpt-5-mini": {
+      "gpt-5.2": {
         "supports_vision": true,
         "uses_max_completion_tokens": true
       },
-      "o1": { "supports_vision": true, "uses_max_completion_tokens": true },
-      "o3": { "supports_vision": true, "uses_max_completion_tokens": true },
-      "o4-mini": {
+      "gpt-5.4": {
         "supports_vision": true,
         "uses_max_completion_tokens": true
+      },
+      "gpt-5.4-mini": {
+        "supports_vision": true,
+        "uses_max_completion_tokens": true
+      },
+      "gpt-5.4-nano": {
+        "supports_vision": true,
+        "uses_max_completion_tokens": true
+      },
+      "gpt-5.5": {
+        "supports_vision": true,
+        "uses_max_completion_tokens": true,
+        "temperature_not_supported": true
+      },
+      "o1": {
+        "supports_vision": true,
+        "uses_max_completion_tokens": true,
+        "temperature_not_supported": true
+      },
+      "o3": {
+        "supports_vision": true,
+        "uses_max_completion_tokens": true,
+        "temperature_not_supported": true
+      },
+      "o3-mini": {
+        "supports_vision": true,
+        "uses_max_completion_tokens": true,
+        "temperature_not_supported": true
+      },
+      "o4-mini": {
+        "supports_vision": true,
+        "uses_max_completion_tokens": true,
+        "temperature_not_supported": true
       },
       "gpt-image-1": {
         "supports_image_generation": true,
@@ -103,7 +149,11 @@
       "claude-sonnet-4-20250514": { "supports_vision": true },
       "claude-opus-4-20250514": { "supports_vision": true },
       "claude-3.5-sonnet-20241022": { "supports_vision": true },
-      "claude-3-opus-20240229": { "supports_vision": true }
+      "claude-3-opus-20240229": { "supports_vision": true },
+      "claude-opus-4-7": {
+        "supports_vision": true,
+        "temperature_not_supported": true
+      }
     },
     "xai": {
       "grok-4-fast-non-reasoning": {
@@ -115,6 +165,14 @@
         "uses_max_completion_tokens": true
       },
       "grok-4.3": {
+        "supports_vision": true,
+        "uses_max_completion_tokens": true
+      },
+      "grok-4.20-0309-non-reasoning": {
+        "supports_vision": true,
+        "uses_max_completion_tokens": true
+      },
+      "grok-4.20-0309-reasoning": {
         "supports_vision": true,
         "uses_max_completion_tokens": true
       },
@@ -151,10 +209,15 @@
         "supports_vision": true,
         "uses_max_completion_tokens": true
       },
-      "o3": { "supports_vision": true, "uses_max_completion_tokens": true },
+      "o3": {
+        "supports_vision": true,
+        "uses_max_completion_tokens": true,
+        "temperature_not_supported": true
+      },
       "o4-mini": {
         "supports_vision": true,
-        "uses_max_completion_tokens": true
+        "uses_max_completion_tokens": true,
+        "temperature_not_supported": true
       },
       "claude-sonnet-4": { "supports_vision": true },
       "claude-opus-4.6": { "supports_vision": true }
