@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.10] - 2026-05-24
+
+### Changed
+
+- `Retry.with_retry/2` now logs each retry attempt with HTTP status, body, and backoff delay
+- Final exhaustion error changed from `{:api_error, :max_retries_exceeded}` to `{:api_error, :max_retries_exceeded, last_status, last_body}` — carries the last HTTP status and response body
+
 ## [0.1.9] - 2026-05-24
 
 ### Added
@@ -153,7 +160,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Async body drain**: Streaming errors drain the `Req.Response.Async` body at the adapter layer — callers never receive opaque structs
 - **Base URL handling**: Strips trailing `/v1` before appending API paths, correctly handles versioned paths (Z.AI `/v4`)
 
-[Unreleased]: https://github.com/kakilangit/arcanum/compare/v0.1.9...HEAD
+[Unreleased]: https://github.com/kakilangit/arcanum/compare/v0.1.10...HEAD
+[0.1.10]: https://github.com/kakilangit/arcanum/compare/v0.1.9...v0.1.10
 [0.1.9]: https://github.com/kakilangit/arcanum/compare/v0.1.8...v0.1.9
 [0.1.8]: https://github.com/kakilangit/arcanum/compare/v0.1.7...v0.1.8
 [0.1.7]: https://github.com/kakilangit/arcanum/compare/v0.1.6...v0.1.7

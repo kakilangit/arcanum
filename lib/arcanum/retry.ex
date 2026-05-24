@@ -6,6 +6,8 @@ defmodule Arcanum.Retry do
   that adapters use for transient HTTP errors.
   """
 
+  require Logger
+
   @max_attempts 3
   @max_backoff_ms :timer.seconds(30)
 
@@ -36,6 +38,9 @@ defmodule Arcanum.Retry do
   - `:on_success` — `fn response -> result` for status 200 (required)
   - `:on_error` — `fn status, body -> result` for non-retriable errors (required)
   - `:max_attempts` — override default max attempts (optional)
+
+  On exhaustion, returns `{:error, {:api_error, :max_retries_exceeded, last_status, last_body}}`
+  where `last_status` and `last_body` are from the final failed attempt.
   """
   @spec with_retry(keyword(), (-> {:ok, map()} | {:error, term()})) :: term()
   def with_retry(opts, fun) do
@@ -62,18 +67,36 @@ defmodule Arcanum.Retry do
 
   defp handle_non_200(opts, fun, attempt, max, retriable, on_error, status, body) do
     if Enum.member?(retriable, status) do
-      maybe_retry(opts, fun, attempt, max)
+      maybe_retry(opts, fun, attempt, max, status, body)
     else
       on_error.(status, body)
     end
   end
 
-  defp maybe_retry(_opts, _fun, attempt, max) when attempt >= max do
-    {:error, {:api_error, :max_retries_exceeded}}
+  defp maybe_retry(_opts, _fun, attempt, max, status, body) when attempt >= max do
+    Logger.error(
+      "Arcanum.Retry: all #{max} attempts exhausted (last: HTTP #{status} — #{truncate_body(body)})"
+    )
+
+    {:error, {:api_error, :max_retries_exceeded, status, body}}
   end
 
-  defp maybe_retry(opts, fun, attempt, max) do
-    backoff(attempt)
+  defp maybe_retry(opts, fun, attempt, max, status, body) do
+    delay = min(:timer.seconds(2) * Integer.pow(2, attempt - 1), @max_backoff_ms)
+
+    Logger.warning(
+      "Arcanum.Retry: attempt #{attempt}/#{max} failed with HTTP #{status}, " <>
+        "retrying in #{div(delay, 1000)}s — #{truncate_body(body)}"
+    )
+
+    Process.sleep(delay)
     do_retry(opts, fun, attempt + 1, max)
   end
+
+  defp truncate_body(body) when is_binary(body) and byte_size(body) > 200 do
+    binary_part(body, 0, 200) <> "..."
+  end
+
+  defp truncate_body(body) when is_binary(body), do: body
+  defp truncate_body(body), do: inspect(body, limit: 200)
 end
