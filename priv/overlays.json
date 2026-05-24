@@ -61,6 +61,10 @@
         "supports_vision": true,
         "uses_max_completion_tokens": true
       },
+      "gpt-5-mini": {
+        "supports_vision": true,
+        "uses_max_completion_tokens": true
+      },
       "o1": { "supports_vision": true, "uses_max_completion_tokens": true },
       "o3": { "supports_vision": true, "uses_max_completion_tokens": true },
       "o4-mini": {
