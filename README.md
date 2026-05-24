@@ -25,7 +25,7 @@ Arcanum provides a unified interface for chat completion, streaming, embeddings,
 ```elixir
 def deps do
   [
-    {:arcanum, "~> 0.1.4"}
+    {:arcanum, "~> 0.1.8"}
   ]
 end
 ```
@@ -427,6 +427,29 @@ The regression script supports flags:
 ./test/regression.sh --skip-vision    # skip vision tests
 ./test/regression.sh --skip-image-gen # skip image generation tests
 ```
+
+### Model Verification
+
+Comprehensive per-model capability testing across all providers:
+
+```sh
+# Source API keys
+set -a && source .env && set +a
+
+# All providers
+elixir test/verify_models.exs
+
+# Single provider
+elixir test/verify_models.exs --provider openai
+
+# Multiple providers
+elixir test/verify_models.exs --provider anthropic --provider xai
+
+# List available models per provider
+elixir test/list_models.exs
+```
+
+Tests each model for chat, tool_call, and streaming. Reports a pass/fail matrix with failure details.
 
 ## Contributing
 
